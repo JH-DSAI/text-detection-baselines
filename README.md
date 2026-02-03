@@ -7,8 +7,6 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14052740.svg)](https://doi.org/10.5281/zenodo.14052740)
 
 
-![SSEC-JHU Logo](docs/_static/SSEC_logo_horiz_blue_1152x263.png)
-
 Base repo template to be used by all others.
 
 Things to do when using this template:
