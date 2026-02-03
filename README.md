@@ -1,4 +1,4 @@
-# SSEC-JHU text_detection_baselines
+# text-detection-baselines
 
 [![CI](https://github.com/JH-DSAI/text-detection-baselines.git/actions/workflows/ci.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines.git/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/text-detection-baselines/badge/?version=latest)](https://text-detection-baselines.readthedocs.io/en/latest/?badge=latest)
