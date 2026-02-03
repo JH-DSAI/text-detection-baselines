@@ -1,16 +1,16 @@
-# Contributing to text_detection_baselines
+# Contributing to text-detection-baselines
 
-Thank you for your interest in contributing to text_detection_baselines! As a contributor, you’ll work from your fork of the main repository. This document outlines the steps to set up your development environment, guidelines for coding, and instructions for submitting contributions.
+Thank you for your interest in contributing to text-detection-baselines! As a contributor, you’ll work from your fork of the main repository. This document outlines the steps to set up your development environment, guidelines for coding, and instructions for submitting contributions.
 
 
 ## Repository Information
 
-- **Main Repository**: `https://github.com/ssec-jhu/base-template`
+- **Main Repository**: `https://github.com/JH-DSAI/text-detection-baselines`
 
 ## How to Fork the Repository
 
 1. **Go to the Repository on GitHub**:
-   - Open your web browser and navigate to the main repository you want to fork. For this project, the URL is `https://github.com/ssec-jhu/base-template`.
+   - Open your web browser and navigate to the main repository you want to fork. For this project, the URL is `https://github.com/JH-DSAI/text-detection-baselines`.
 
 2. **Click the Fork Button**:
    - In the upper-right corner of the repository page, you’ll see a button labeled **Fork**. Click it. 
@@ -33,7 +33,7 @@ You now have your own copy (fork) of the repository where you can make changes i
 
 2. **Add the Main Repository as Upstream**: To keep your fork in sync with the latest updates from the main repo, add it as a second remote named `upstream`:
    ```bash
-   git remote add upstream https://github.com/ssec-jhu/base-template
+   git remote add upstream https://github.com/JH-DSAI/text-detection-baselines
    ```
 
 3. **Create a Branch**: Create a new branch for each feature or bug fix:
@@ -76,7 +76,7 @@ When you’re ready to contribute your changes:
 3. **Open a Pull Request**:
    - Go to your forked repository on GitHub.
    - Click on **New Pull Request**.
-   - Ensure the base repository is `https://github.com/ssec-jhu/base-template` and the base branch is `main`.
+   - Ensure the base repository is `https://github.com/JH-DSAI/text-detection-baselines` and the base branch is `main`.
    - Provide a title and description for your pull request.
    - Submit the pull request for review.
 
@@ -101,5 +101,5 @@ open a PR adding yourself to the [.zenodo.json file](.zenodo.json) along with yo
 
 ---
 
-Thank you for your contributions to text_detection_baselines! We’re excited to work with you.
+Thank you for your contributions to text-detection-baselines! We’re excited to work with you.
 
