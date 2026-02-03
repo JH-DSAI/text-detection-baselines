@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
-from package_name import __project__, __version__
+from text_detection_baselines import __project__, __version__
 
 
 project = __project__

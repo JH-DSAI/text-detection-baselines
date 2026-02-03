@@ -4,4 +4,4 @@ API
 .. autosummary::
    :toctree: generated
 
-   <package_name>
+   text_detection_baselines
