@@ -1,0 +1,29 @@
+name: Tests
+
+on: [push, workflow_dispatch]
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["test", "test313", "test314"]
+    steps:
+      - uses: actions/checkout@v5
+      - name: Activate ${{ matrix.environment }} environment
+        uses: prefix-dev/setup-pixi@v0.9.3
+        with:
+          pixi-version: v0.62.1
+          locked: true
+          cache: true
+          environments: ${{ matrix.environment }}
+          manifest-path: pixi.toml
+      - name: Run tests
+        run: pixi run -e ${{ matrix.environment }} --locked -v test
+
+  shell-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
