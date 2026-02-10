@@ -19,7 +19,7 @@ Thank you for your interest in contributing to text-detection-baselines! As a co
 3. **Clone Your Fork Locally**:
    - Once your fork is created, you can clone it to your local machine to start working:
    ```bash
-   git clone https://github.com/your-username/base-template
+   git clone https://github.com/your-username/text-detection-baselines
    cd <repo dir>
    ```
 

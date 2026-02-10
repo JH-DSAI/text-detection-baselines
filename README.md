@@ -81,7 +81,7 @@ For additional cmds see the [Conda cheat-sheet](https://docs.conda.io/projects/c
   #### with Docker:
   * Follow the above [Build with Docker instructions](#with-docker).
   * Run container from image: ``docker run -d -p 8000:8000 <image_name>``. _NOTE: ``-p 8000:8000`` is specific to the example application using port 8000._
-  * Alternatively, images can be pulled from ``ghcr.io/ssec-jhu/`` e.g., ``docker pull ghcr.io/JH-DSAI/text-detection-baselines:pr-1``.
+  * Alternatively, images can be pulled from ``ghcr.io/JH-DSAI/`` e.g., ``docker pull ghcr.io/JH-DSAI/text-detection-baselines:pr-1``.
 
   #### with Python ecosystem:
   * Follow the above [Build with Python ecosystem instructions](#with-python-ecosystem).

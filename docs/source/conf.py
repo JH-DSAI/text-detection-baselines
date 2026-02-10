@@ -38,14 +38,14 @@ html_theme = 'sphinx_rtd_theme'
 #html_theme = 'sphinx_book_theme'
 html_static_path = ['../_static']
 html_css_files = ['../_static/custom.css']
-#html_logo = '../_static/SSEC_logo_vert_white_lg_1184x661.png'
+#html_logo = '../_static/TODO.png'
 html_title = f'{project} {release}'
 html_theme_options = {}
 if html_theme == 'sphinx_book_theme':
     html_theme_options.update({
         'logo': {
-            #'image_light': '../_static/SSEC_logo_horiz_blue_1152x263.png',
-            #'image_dark': '../_static/SSEC_logo_vert_white_lg_1184x661.png',
+            #'image_light': '../_static/TODO.png',
+            #'image_dark': '../_static/TODO.png',
             'text': f'{html_title}',
         },
         'repository_url': 'https://github.com/JH-DSAI/text-detection-baselines',
