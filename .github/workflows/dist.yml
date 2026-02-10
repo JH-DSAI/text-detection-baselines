@@ -31,7 +31,7 @@ jobs:
   # https://pypi.org/manage/account/publishing/. Fill in the fields as follows:
   #
   # * PyPI Project Name: name of pypi package
-  # * Owner: org, e.g. ssec-jhu
+  # * Owner: org, e.g. JH-DSAI
   # * Repository name: name of repo not-including org, e.g. base-template
   # * Workflow name: dist.yml
   #
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/<pypi-package-name>
+      url: https://test.pypi.org/p/text-detection-baselines
     permissions:
       id-token: write
     steps:
@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/<pypi-package-name> 
+      url: https://pypi.org/p/text-detection-baselines
     permissions:
       id-token: write
     steps:

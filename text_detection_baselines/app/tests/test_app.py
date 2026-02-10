@@ -1,4 +1,4 @@
-from ..main import __version__  # Leave as relative for use in template: ssec-jhu/base-template.
+from ..main import __version__  # Leave as relative for use in template: ssec-jhu/base-template (TODO).
 
 
 class TestApp:
