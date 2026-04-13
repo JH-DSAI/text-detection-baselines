@@ -4,31 +4,17 @@
 [![Documentation Status](https://readthedocs.org/projects/text-detection-baselines/badge/?version=latest)](https://text-detection-baselines.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/JH-DSAI/text-detection-baselines/branch/main/graph/badge.svg?token=0KPNKHRC2V)](https://codecov.io/gh/JH-DSAI/text-detection-baselines)
 [![Security](https://github.com/JH-DSAI/text-detection-baselines.git/actions/workflows/security.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines.git/actions/workflows/security.yml)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14052740.svg)](https://doi.org/10.5281/zenodo.14052740)
+<!-- [![DOI](https://zenodo.org/badge/DOI/REPLACE/ME.svg)](https://doi.org/REPLACE/ME) -->
 
 
-Base repo template to be used by all others.
+To do:
 
-Things to do when using this template:
-
- * Run ```python project_setup.py```
  * Uncomment above DOI in README.md and correct ``<insert_ID_number>``.
  * Correct "description" field in .zenodo.json to reflect description of child repo.
  * Correct the ``CI Status`` badge with the correct token in the URL.
  * Import package into https://readthedocs.org/.
  * Update [zenodo.json](zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
  * Update quickstart guide below.
-
-What's included in this template:
-
- * Licence file
- * Code of Conduct
- * Build & Setup, inc. ``pip`` dependency requirements.
- * Dependabot GitHub action
- * CI for GitHub actions: lint, pytest, build & publish docker image to GitHub Packages.
- * Dockerfile.
- * Pytest example(s).
- * Githooks.
 
 # Quickstart Guide
 
