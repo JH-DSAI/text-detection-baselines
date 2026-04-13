@@ -32,7 +32,7 @@ jobs:
   #
   # * PyPI Project Name: name of pypi package
   # * Owner: org, e.g. JH-DSAI
-  # * Repository name: name of repo not-including org, e.g. base-template
+  # * Repository name: text-detection-baselines
   # * Workflow name: dist.yml
   #
   # This should be done separately for both testpypi and pypi (these need
