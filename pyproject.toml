@@ -16,7 +16,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "bandit>=1.7",
+    "bandit>=1.9.4",
     "build",
     "pytest",
     "pytest-cov",
