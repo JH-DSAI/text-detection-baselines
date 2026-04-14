@@ -695,8 +695,7 @@ def main() -> None:
         "--features-dir",
         default=None,
         help=(
-            "Directory of pre-extracted features (output of fit_features.py). "
-            "If provided, skips feature extraction."
+            "Directory of pre-extracted features (output of fit_features.py). If provided, skips feature extraction."
         ),
     )
     parser.add_argument(
@@ -756,10 +755,7 @@ def main() -> None:
 
     # ── Extract validation features ──────────────────────────────────
     if not config.data.validation:
-        logging.error(
-            "No validation data path set in config (data.validation). "
-            "Cannot evaluate without held-out data."
-        )
+        logging.error("No validation data path set in config (data.validation). Cannot evaluate without held-out data.")
         sys.exit(1)
 
     val_x, val_y, val_categories = extract_validation_features(
