@@ -1,4 +1,6 @@
-__project__ = "text_detection_baselines"  # Replace text_detection_baselines with actual name (it's just a template).
+"""Benchmarking suite for machine text detection."""
+
+__project__ = "text_detection_baselines"
 
 try:
     from ._version import __version__

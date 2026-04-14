@@ -1,5 +1,5 @@
 Welcome to text_detection_baselines's documentation!
-==========================================
+====================================================
 
 **text_detection_baselines** is a Python library for...
 

@@ -1,8 +1,9 @@
 [project]
-name = "text-detection-baselines"  # Replace text_detection_baselines with actual name (it's just a template).
+name = "text-detection-baselines"
 dynamic = ["version"]
 authors = [
     {name = "JHU Data Science and AI Institute"},
+    {name = "JHU Human Language Technology Center of Excellence"},
 ]
 description = ""
 readme = "README.md"
@@ -51,7 +52,7 @@ include = ["text_detection_baselines*"]
 exclude = ["*.tests*"]
 
 [tool.setuptools_scm]
-write_to = "text_detection_baselines/_version.py"  # Replace text_detection_baselines with actual name (it's just a template).
+write_to = "text_detection_baselines/_version.py"
 
 [tool.bandit]
 exclude_dirs = ["tests"]
@@ -62,8 +63,6 @@ lint.select = ["ALL"]
 lint.ignore = [
     "ANN002",  # https://docs.astral.sh/ruff/rules/missing-type-args/
     "ANN003",  # https://docs.astral.sh/ruff/rules/missing-type-kwargs/
-    "ANN101",  # https://docs.astral.sh/ruff/rules/missing-type-self/
-    "ANN102",  # https://docs.astral.sh/ruff/rules/missing-type-cls/
     "ANN401",  # https://docs.astral.sh/ruff/rules/any-type/
     "PLR0913",  # https://docs.astral.sh/ruff/rules/too-many-arguments/
     "EM101",  # https://docs.astral.sh/ruff/rules/raw-string-in-exception/
