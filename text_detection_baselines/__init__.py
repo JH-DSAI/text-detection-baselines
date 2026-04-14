@@ -1,3 +1,5 @@
+"""Benchmarking suite for machine text detection."""
+
 __project__ = "text_detection_baselines"
 
 try:
