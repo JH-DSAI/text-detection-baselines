@@ -6,4 +6,4 @@ Usage
 Installation
 ------------
 
-To use <package_name>, first install it using...:
+To use text_detection_baselines, first install it using...:
