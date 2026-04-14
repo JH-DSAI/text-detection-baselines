@@ -9,10 +9,9 @@
 
 To do:
 
- * Uncomment above DOI in README.md and correct ``<insert_ID_number>``.
- * Correct "description" field in .zenodo.json to reflect description of child repo.
+ * Uncomment and update the DOI above in this README.
  * Import package into https://readthedocs.org/.
- * Update [zenodo.json](zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
+ * Update [.zenodo.json](.zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
  * Update quickstart guide below.
 
 # Quickstart Guide
