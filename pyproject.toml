@@ -20,6 +20,7 @@ dependencies = [
 dev = [
     "bandit>=1.7",
     "build",
+    "mypy",
     "pytest",
     "pytest-cov",
     "ruff",
