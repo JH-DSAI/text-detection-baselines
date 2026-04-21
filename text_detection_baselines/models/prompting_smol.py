@@ -46,17 +46,14 @@ class SmolLMPromptingDetector(StubTextDetector):
             from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError(
-                "transformers is required for SmolLM prompting detector. "
-                "Install it with: pip install transformers",
+                "transformers is required for SmolLM prompting detector. Install it with: pip install transformers",
             ) from exc
 
         try:
             self._tokenizer = AutoTokenizer.from_pretrained(self.hf_model_id)
             self._model = AutoModelForCausalLM.from_pretrained(self.hf_model_id)
         except Exception as exc:  # pragma: no cover
-            raise RuntimeError(
-                f"Could not load huggingface model '{self.hf_model_id}'."
-            ) from exc
+            raise RuntimeError(f"Could not load huggingface model '{self.hf_model_id}'.") from exc
 
         self._device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self._model.to(self._device)
@@ -89,7 +86,9 @@ class SmolLMPromptingDetector(StubTextDetector):
         prompt = self._build_prompt(text)
         prompt_ids = self._tokenizer(prompt, return_tensors="pt", add_special_tokens=True).to(self._device).input_ids
 
-        machine_ids = self._tokenizer(" machine", return_tensors="pt", add_special_tokens=False).to(self._device).input_ids
+        machine_ids = (
+            self._tokenizer(" machine", return_tensors="pt", add_special_tokens=False).to(self._device).input_ids
+        )
         human_ids = self._tokenizer(" human", return_tensors="pt", add_special_tokens=False).to(self._device).input_ids
 
         lp_machine = self._sequence_logprob(prompt_ids, machine_ids)
