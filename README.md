@@ -19,13 +19,7 @@ To do:
 
 1. Install pixi from <https://pixi.sh/latest/>.
 1. Clone this repository.
-1. Install environments and lockfile dependencies:
-
-```bash
-pixi install -a
-```
-
-1. Run tests:
+1. Run tests (installing dependencies in a virtual environment):
 
 ```bash
 pixi run -e dev test
