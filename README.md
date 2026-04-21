@@ -34,9 +34,8 @@ pixi run -e dev test
 ## Common commands
 
 ```bash
-# lint/format/security
-pixi run -e dev check-style
-pixi run -e dev check-security
+# lint/format
+pixi run -e dev lint
 pixi run -e dev format
 
 # tests + coverage outputs
@@ -47,9 +46,6 @@ pixi run -e docs build-docs
 
 # distribution artifacts (wheel + sdist)
 pixi run -e dist build-dist
-
-# run app
-pixi run start
 ```
 
 ## Docker
@@ -63,7 +59,7 @@ docker build -t text-detection-baselines .
 Run:
 
 ```bash
-docker run --rm -p 8000:8000 text-detection-baselines
+docker run --rm text-detection-baselines
 ```
 
 ## Git hook (optional)
