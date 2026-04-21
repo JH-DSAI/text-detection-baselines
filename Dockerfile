@@ -1,11 +1,13 @@
-FROM python:3.11-slim
+FROM ghcr.io/prefix-dev/pixi:0.67.0
 
 WORKDIR /app
 
-COPY requirements/prd.txt requirements.txt
-
-RUN pip3 install -r requirements.txt
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends git \
+	&& rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
-CMD ["uvicorn", "text_detection_baselines.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+RUN pixi install --locked
+
+CMD ["pixi", "run", "start"]

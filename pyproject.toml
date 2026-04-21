@@ -22,9 +22,8 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
-    "setuptools>=61.2",
-    "setuptools_scm[toml]>=8.0",
-    "tox"
+    "hatchling>=1.27",
+    "hatch-vcs>=0.4"
 ]
 docs = [
     "sphinx",
@@ -40,20 +39,17 @@ documentation = "https://github.com/JH-DSAI/text-detection-baselines.git"
 repository = "https://github.com/JH-DSAI/text-detection-baselines.git"
 
 [build-system]
-requires = ["setuptools>=61.2", "setuptools_scm[toml]>=8.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.27", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
 
-[tool.setuptools]
-zip-safe = false
-include-package-data = true
-exclude-package-data = {"*" = ["tests/*"]}
+[tool.hatch.version]
+source = "vcs"
 
-[tool.setuptools.packages.find]
-include = ["text_detection_baselines*"]
-exclude = ["*.tests*"]
+[tool.hatch.build.hooks.vcs]
+version-file = "text_detection_baselines/_version.py"
 
-[tool.setuptools_scm]
-write_to = "text_detection_baselines/_version.py"
+[tool.hatch.build.targets.wheel]
+packages = ["text_detection_baselines"]
 
 [tool.bandit]
 exclude_dirs = ["tests"]
@@ -115,3 +111,60 @@ convention = "google"
 docstring-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_docstring-quotes
 inline-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_inline-quotes
 multiline-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_multiline-quotes
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
+
+[tool.pixi.dependencies]
+python = ">=3.11,<3.15"
+
+[tool.pixi.pypi-dependencies]
+text-detection-baselines = { path = ".", editable = true }
+
+[tool.pixi.feature.dev.pypi-dependencies]
+bandit = ">=1.7"
+build = ">=1.0"
+pytest = ">=9.0"
+pytest-cov = ">=7.1"
+ruff = ">=0.15"
+
+[tool.pixi.feature.docs.pypi-dependencies]
+sphinx = ">=9.0"
+sphinx_rtd_theme = ">=3.1"
+sphinx_book_theme = ">=1.2"
+sphinx-automodapi = ">=0.22"
+nbsphinx = ">=0.9"
+
+[tool.pixi.feature.py311.dependencies]
+python = "3.11.*"
+
+[tool.pixi.feature.py312.dependencies]
+python = "3.12.*"
+
+[tool.pixi.feature.py313.dependencies]
+python = "3.13.*"
+
+[tool.pixi.feature.py314.dependencies]
+python = "3.14.*"
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+docs = { features = ["dev", "docs"], solve-group = "default" }
+dist = { features = ["dev"], solve-group = "default" }
+test-py311 = { features = ["dev", "py311"], solve-group = "test-py311" }
+test-py312 = { features = ["dev", "py312"], solve-group = "test-py312" }
+test-py313 = { features = ["dev", "py313"], solve-group = "test-py313" }
+test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
+
+[tool.pixi.tasks]
+check-style = "ruff format . --check && ruff check ."
+check-security = "bandit -c pyproject.toml --severity-level=medium -r text_detection_baselines"
+format = "ruff format . && ruff check --select I --fix ."
+test = "pytest --cov=./ --cov-report=html:coverage.html --cov-report=xml:coverage.xml"
+build-docs = "cd docs && make clean html latex epub"
+build-dist = "python -m build"
+start = "uvicorn text_detection_baselines.app.main:app --host 0.0.0.0 --port 8000"
+lint = { depends-on = ["check-style", "check-security"] }
+ci = { depends-on = ["check-style", "check-security", "test"] }

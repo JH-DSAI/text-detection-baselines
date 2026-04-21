@@ -6,124 +6,76 @@
 [![Security](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml)
 <!-- [![DOI](https://zenodo.org/badge/DOI/REPLACE/ME.svg)](https://doi.org/REPLACE/ME) -->
 
+Benchmarking suite for machine text detection.
 
 To do:
 
- * Uncomment and update the DOI above in this README.
- * Import package into https://readthedocs.org/.
- * Update [.zenodo.json](.zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
- * Update quickstart guide below.
+* Uncomment and update the DOI above in this README.
+* Import package into [readthedocs](https://readthedocs.org/).
+* Update [.zenodo.json](.zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
+* Update quickstart guide below.
 
-# Quickstart Guide
+## Quickstart (pixi)
 
-Add here, streamlined instructions on how to get the code running as swiftly as possible, and provide usage example(s).
-This shouldn't attempt to cover all OS's and/or build variations - just the canonical. Since users are most likely
-viewing this README from GitHub.com, assuming a repo context might be best, where instructions look like those below.
-Alternatively, if this package is distributed on PyPi, perhaps just ``pip install <package-name>``, followed by quick
-user instructions, will suffice.
+1. Install pixi from <https://pixi.sh/latest/>.
+1. Clone this repository.
+1. Install environments and lockfile dependencies:
 
-  * ``git clone https://github.com/JH-DSAI/text-detection-baselines.git``
-  * ``conda create -n text_detection_baselines python pip``
-  * ``conda activate text_detection_baselines``
-  * ``pip pinstall -e .``
-  * Add user instructions.
+```bash
+pixi install -a
+```
 
-# Installation, Build, & Run instructions
+1. Run tests:
 
-### Conda:
+```bash
+pixi run -e dev test
+```
 
-For additional cmds see the [Conda cheat-sheet](https://docs.conda.io/projects/conda/en/4.6.0/_downloads/52a95608c49671267e40c689e0bc00ca/conda-cheatsheet.pdf).
+## Common commands
 
- * Download and install either [miniconda](https://docs.conda.io/en/latest/miniconda.html#installing) or [anaconda](https://docs.anaconda.com/free/anaconda/install/index.html).
- * Create new environment (env) and install ``conda create -n <environment_name>``
- * Activate/switch to new env ``conda activate <environment_name>``
- * ``cd`` into repo dir.
- * Install ``python`` and ``pip`` ``conda install python=3.11 pip``
- * Install all required dependencies (assuming local dev work), there are two ways to do this
-   * If working with tox (recommended) ``pip install -r requirements/dev.txt``.
-   * If you would like to setup an environment with all requirements to run outside of tox ``pip install -r requirements/all.txt``.
+```bash
+# lint/format/security
+pixi run -e dev check-style
+pixi run -e dev check-security
+pixi run -e dev format
 
-### Build:
+# tests + coverage outputs
+pixi run -e dev test
 
-  #### with Docker:
-  * Download & install Docker - see [Docker install docs](https://docs.docker.com/get-docker/).
-  * ``cd`` into repo dir.
-  * Build image: ``docker build -t <image_name> .``
+# docs
+pixi run -e docs build-docs
 
-  #### with Python ecosystem:
-  * ``cd`` into repo dir.
-  * ``conda activate <environment_name>``
-  * Build and install package in <environment_name> conda env: ``pip install .``
-  * Do the same but in dev/editable mode (changes to repo will be reflected in env installation upon python kernel restart)
-    _NOTE: This is the preferred installation method for dev work._
-    ``pip install -e .``.
-    _NOTE: If you didn't install dependencies from ``requirements/dev.txt``, you can install
-    a looser constrained set of deps using: ``pip install -e .[dev]``._
+# distribution artifacts (wheel + sdist)
+pixi run -e dist build-dist
 
-### Run
+# run app
+pixi run start
+```
 
-  #### with Docker:
-  * Follow the above [Build with Docker instructions](#with-docker).
-  * Run container from image: ``docker run -d -p 8000:8000 <image_name>``. _NOTE: ``-p 8000:8000`` is specific to the example application using port 8000._
-  * Alternatively, images can be pulled from ``ghcr.io/JH-DSAI/`` e.g., ``docker pull ghcr.io/JH-DSAI/text-detection-baselines:pr-1``.
+## Docker
 
-  #### with Python ecosystem:
-  * Follow the above [Build with Python ecosystem instructions](#with-python-ecosystem).
-  * Run ``uvicorn text_detection_baselines.app.main:app --host 0.0.0.0 --port", "8000``. _NOTE: This is just an example and is obviously application dependent._
+Build:
 
-### Usage:
-To be completed by child repo.
+```bash
+docker build -t text-detection-baselines .
+```
 
+Run:
 
-# Testing
-_NOTE: The following steps require ``pip install -r requirements/dev.txt``._
+```bash
+docker run --rm -p 8000:8000 text-detection-baselines
+```
 
-## Using tox
+## Git hook (optional)
 
-* Run tox ``tox``. This will run all of linting, security, test, docs and package building within tox virtual environments.
-* To run an individual step, use ``tox -e {step}`` for example, ``tox -e test``, ``tox -e build-docs``, etc.
+Install the pre-push hook to run style checks before pushing:
 
-Typically, the CI tests run in github actions will use tox to run as above. See also [ci.yml](https://github.com/JH-DSAI/text-detection-baselines.git/blob/main/.github/workflows/ci.yml).
+```bash
+cp ./githooks/pre-push .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
 
-## Outside of tox:
+## Notes
 
-The below assume you are running steps without tox, and that all requirements are installed into a conda environment, e.g. with ``pip install -r requirements/all.txt``.
-
-_NOTE: Tox will run these for you, this is specifically if there is a requirement to setup environment and run these outside the purview of tox._
-
-### Linting:
-Facilitates in testing typos, syntax, style, and other simple code analysis tests.
-  * ``cd`` into repo dir.
-  * Switch/activate correct environment: ``conda activate <environment_name>``
-  * Run ``ruff .``
-  * This can be automatically run (recommended for devs) every time you ``git push`` by installing the provided
-    ``pre-push`` git hook available in ``./githooks``.
-    Instructions are in that file - just ``cp ./githooks/pre-push .git/hooks/;chmod +x .git/hooks/pre-push``.
-
-### Security Checks:
-Facilitates in checking for security concerns using [Bandit](https://bandit.readthedocs.io/en/latest/index.html).
- * ``cd`` into repo dir.
- * ``bandit --severity-level=medium -r text_detection_baselines``
-
-### Unit Tests:
-Facilitates in testing core package functionality at a modular level.
-  * ``cd`` into repo dir.
-  * Run all available tests: ``pytest .``
-  * Run specific test: ``pytest tests/test_util.py::test_base_dummy``.
-
-### Regression tests:
-Facilitates in testing whether core data results differ during development.
-  * WIP
-
-### Smoke Tests:
-Facilitates in testing at the application and infrastructure level.
-  * WIP
-
-### Build Docs:
-Facilitates in building, testing & viewing the docs.
- * ``cd`` into repo dir.
- * ``pip install -r requirements/docs.txt``
- * ``cd docs``
- * ``make clean``
- * ``make html``
- * To view the docs in your default browser run ``open docs/_build/html/index.html``.
+* CI, security, docs, and distribution workflows use pixi tasks.
+* Read the Docs installs documentation dependencies from project extras.
