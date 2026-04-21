@@ -72,12 +72,14 @@ def build_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetect
 
 def _torch_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector:
     return TorchLinearStubDetector(
-        model_name="torch-normalized", normalized_scores=True, ood_margin=ood_margin, seed=seed
+        model_name="fixed-linear-normalized", normalized_scores=True, ood_margin=ood_margin, seed=seed
     )
 
 
 def _torch_raw_factory(ood_margin: float, seed: int) -> StubTextDetector:
-    return TorchLinearStubDetector(model_name="torch-raw", normalized_scores=False, ood_margin=ood_margin, seed=seed)
+    return TorchLinearStubDetector(
+        model_name="fixed-linear-raw", normalized_scores=False, ood_margin=ood_margin, seed=seed
+    )
 
 
 def _length_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector:
@@ -98,8 +100,8 @@ def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector
     )
 
 
-register_model("torch-normalized", _torch_normalized_factory)
-register_model("torch-raw", _torch_raw_factory)
+register_model("fixed-linear-normalized", _torch_normalized_factory)
+register_model("fixed-linear-raw", _torch_raw_factory)
 register_model("length-normalized", _length_normalized_factory)
 register_model("smollm2-prompting", _smollm2_prompting_factory, is_default=False)
 

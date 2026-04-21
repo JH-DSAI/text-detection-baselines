@@ -32,13 +32,13 @@ def test_build_stub_model_length_normalized():
 
 
 def test_build_stub_model_torch_normalized():
-    model = build_stub_model("torch-normalized", ood_margin=0.05, seed=1)
+    model = build_stub_model("fixed-linear-normalized", ood_margin=0.05, seed=1)
     assert isinstance(model, TorchLinearStubDetector)
     assert model.normalized_scores is True
 
 
 def test_build_stub_model_torch_raw():
-    model = build_stub_model("torch-raw", ood_margin=0.05, seed=1)
+    model = build_stub_model("fixed-linear-raw", ood_margin=0.05, seed=1)
     assert isinstance(model, TorchLinearStubDetector)
     assert model.normalized_scores is False
 
@@ -65,22 +65,22 @@ def test_length_heuristic_scores_normalized():
 
 
 def test_torch_raw_scores_unbounded():
-    model = TorchLinearStubDetector("torch-raw", normalized_scores=False, ood_margin=0.0, seed=1)
+    model = TorchLinearStubDetector("fixed-linear-raw", normalized_scores=False, ood_margin=0.0, seed=1)
     output = model.predict(_TEXTS)
     # Raw scores can be outside [0, 1]
     assert output.scores.shape == (3,)
 
 
 def test_torch_normalized_scores_in_unit_interval():
-    model = TorchLinearStubDetector("torch-normalized", normalized_scores=True, ood_margin=0.0, seed=1)
+    model = TorchLinearStubDetector("fixed-linear-normalized", normalized_scores=True, ood_margin=0.0, seed=1)
     output = model.predict(_TEXTS)
     assert np.all(output.scores >= 0.0)
     assert np.all(output.scores <= 1.0)
 
 
 def test_determinism_same_seed():
-    model1 = build_stub_model("torch-normalized", ood_margin=0.05, seed=42)
-    model2 = build_stub_model("torch-normalized", ood_margin=0.05, seed=42)
+    model1 = build_stub_model("fixed-linear-normalized", ood_margin=0.05, seed=42)
+    model2 = build_stub_model("fixed-linear-normalized", ood_margin=0.05, seed=42)
     out1 = model1.predict(_TEXTS)
     out2 = model2.predict(_TEXTS)
     np.testing.assert_array_equal(out1.scores, out2.scores)
@@ -93,12 +93,12 @@ def test_feature_matrix_shape():
 
 def test_model_registry_defaults_present():
     names = list_registered_models()
-    assert names == ["torch-normalized", "torch-raw", "length-normalized", "smollm2-prompting"]
-    assert get_default_model_names() == ("torch-normalized", "torch-raw", "length-normalized")
+    assert names == ["fixed-linear-normalized", "fixed-linear-raw", "length-normalized", "smollm2-prompting"]
+    assert get_default_model_names() == ("fixed-linear-normalized", "fixed-linear-raw", "length-normalized")
 
 
 def test_build_model_from_registry():
-    model = build_model("TORCH-RAW", ood_margin=0.05, seed=1)
+    model = build_model("fixed-linear-raw", ood_margin=0.05, seed=1)
     assert isinstance(model, TorchLinearStubDetector)
     assert model.normalized_scores is False
 
