@@ -40,6 +40,49 @@ _REGISTERED_MODELS = ", ".join(list_registered_models())
 _DEFAULT_MODELS = ", ".join(get_default_model_names())
 
 
+class NamePathParamType(click.ParamType):
+    """Parse and validate a ``NAME=PATH`` CLI value."""
+
+    name = "name=path"
+
+    def convert(
+        self,
+        value: Any,
+        param: click.Parameter | None,
+        ctx: click.Context | None,
+    ) -> tuple[str, Path]:
+        if not isinstance(value, str) or "=" not in value:
+            self.fail("entries must look like NAME=PATH", param, ctx)
+
+        name, raw_path = value.split("=", 1)
+        dataset_path = Path(raw_path).expanduser()
+        if not dataset_path.exists():
+            self.fail(f"Dataset path does not exist: {dataset_path}", param, ctx)
+
+        return name, dataset_path
+
+
+NAME_PATH = NamePathParamType()
+
+
+def _raise_for_unknown_names(
+    *,
+    names: tuple[str, ...],
+    valid_names: tuple[str, ...],
+    kind: str,
+    param_hint: str,
+) -> None:
+    """Raise ``click.BadParameter`` when one or more names are unknown."""
+    valid_lookup = {name.lower() for name in valid_names}
+    unknown = [name for name in names if name.lower() not in valid_lookup]
+    if unknown:
+        valid = ", ".join(valid_names)
+        raise click.BadParameter(
+            f"Unknown {kind}(s): {', '.join(unknown)}. Valid options: {valid}",
+            param_hint=param_hint,
+        )
+
+
 def _unique_preserve_order(names: list[str]) -> tuple[str, ...]:
     """Return de-duplicated names while preserving first-seen order."""
     seen: set[str] = set()
@@ -265,7 +308,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 @click.option(
     "--register-file-dataset",
     "runtime_file_datasets",
-    type=str,
+    type=NAME_PATH,
     multiple=True,
     help="Register file dataset at runtime as NAME=PATH and include it in evaluation. Repeatable.",
 )
@@ -339,7 +382,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def main(
     datasets: tuple[str, ...],
     models: tuple[str, ...],
-    runtime_file_datasets: tuple[str, ...],
+    runtime_file_datasets: tuple[tuple[str, Path], ...],
     exclude_datasets: tuple[str, ...],
     exclude_models: tuple[str, ...],
     all_datasets: bool,
@@ -362,58 +405,37 @@ def main(
     all_models = all_models or select_all_flag
 
     runtime_dataset_names: list[str] = []
-    for item in runtime_file_datasets:
-        if "=" not in item:
-            raise click.BadParameter(
-                "register-file-dataset entries must look like NAME=PATH",
-                param_hint="--register-file-dataset",
-            )
-        name, raw_path = item.split("=", 1)
-        dataset_path = Path(raw_path).expanduser()
-        if not dataset_path.exists():
-            raise click.BadParameter(
-                f"Dataset path does not exist: {dataset_path}",
-                param_hint="--register-file-dataset",
-            )
+    for name, dataset_path in runtime_file_datasets:
         register_file_dataset(name=name, path=dataset_path)
         runtime_dataset_names.append(name)
 
     registered_datasets = tuple(list_registered_datasets())
     registered_models = tuple(list_registered_models())
-    dataset_lookup = {name.lower() for name in registered_datasets}
-    model_lookup = {name.lower() for name in registered_models}
 
-    unknown_requested_datasets = [name for name in datasets if name.lower() not in dataset_lookup]
-    if unknown_requested_datasets:
-        valid = ", ".join(registered_datasets)
-        raise click.BadParameter(
-            f"Unknown dataset(s): {', '.join(unknown_requested_datasets)}. Valid options: {valid}",
-            param_hint="--dataset",
-        )
-
-    unknown_requested_models = [name for name in models if name.lower() not in model_lookup]
-    if unknown_requested_models:
-        valid = ", ".join(registered_models)
-        raise click.BadParameter(
-            f"Unknown model(s): {', '.join(unknown_requested_models)}. Valid options: {valid}",
-            param_hint="--model",
-        )
-
-    unknown_excluded_datasets = [name for name in exclude_datasets if name.lower() not in dataset_lookup]
-    if unknown_excluded_datasets:
-        valid = ", ".join(registered_datasets)
-        raise click.BadParameter(
-            f"Unknown dataset(s): {', '.join(unknown_excluded_datasets)}. Valid options: {valid}",
-            param_hint="--exclude-dataset",
-        )
-
-    unknown_excluded_models = [name for name in exclude_models if name.lower() not in model_lookup]
-    if unknown_excluded_models:
-        valid = ", ".join(registered_models)
-        raise click.BadParameter(
-            f"Unknown model(s): {', '.join(unknown_excluded_models)}. Valid options: {valid}",
-            param_hint="--exclude-model",
-        )
+    _raise_for_unknown_names(
+        names=datasets,
+        valid_names=registered_datasets,
+        kind="dataset",
+        param_hint="--dataset",
+    )
+    _raise_for_unknown_names(
+        names=models,
+        valid_names=registered_models,
+        kind="model",
+        param_hint="--model",
+    )
+    _raise_for_unknown_names(
+        names=exclude_datasets,
+        valid_names=registered_datasets,
+        kind="dataset",
+        param_hint="--exclude-dataset",
+    )
+    _raise_for_unknown_names(
+        names=exclude_models,
+        valid_names=registered_models,
+        kind="model",
+        param_hint="--exclude-model",
+    )
 
     selected_datasets = _resolve_selection(
         explicit_names=datasets,
