@@ -180,7 +180,6 @@ format = "ruff format . && ruff check --select I --fix ."
 test = "pytest --cov=text_detection_baselines --cov-report=html:coverage.html --cov-report=xml:coverage.xml"
 build-docs = "cd docs && make clean html latex epub"
 build-dist = "python -m build"
-eval = "python -m text_detection_baselines.cli"
-eval-all = "python -m text_detection_baselines.cli --model smollm2-prompting"
+main = "python -m text_detection_baselines.cli"
 lint = { depends-on = ["check-style", "check-security", "check-types"] }
 ci = { depends-on = ["lint", "test"] }

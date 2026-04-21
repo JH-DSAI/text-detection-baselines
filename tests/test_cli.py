@@ -6,7 +6,10 @@ import json
 
 from click.testing import CliRunner
 
+import text_detection_baselines.cli as cli_module
 from text_detection_baselines.cli import _flatten_overall, _flatten_per_category, main
+from text_detection_baselines.models import build_model as registry_build_model
+from text_detection_baselines.models.length_heuristic import LengthHeuristicStubDetector
 
 
 def _write_jsonl(path, rows):
@@ -241,6 +244,108 @@ def test_cli_help_lists_registered_datasets_and_models():
     assert "Available: torch-normalized, torch-raw, length-normalized, smollm2-prompting" in result.output
     assert "Defaults: gede" in result.output
     assert "Defaults: torch-normalized, torch-raw, length-normalized" in result.output
+    assert "--all-datasets" in result.output
+    assert "--all-models" in result.output
+    assert "--all, -a" in result.output
+
+
+def test_cli_all_models_includes_non_default_model(tmp_path, monkeypatch):
+    def fake_build_model(name: str, ood_margin: float, seed: int):
+        if name == "smollm2-prompting":
+            return LengthHeuristicStubDetector(name, normalized_scores=True, ood_margin=ood_margin, seed=seed)
+        return registry_build_model(name, ood_margin=ood_margin, seed=seed)
+
+    dataset_path = tmp_path / "toy.jsonl"
+    output_dir = tmp_path / "out"
+    _write_jsonl(dataset_path, _SAMPLE_ROWS)
+
+    runner = CliRunner()
+    monkeypatch.setattr(cli_module, "build_model", fake_build_model)
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--all-models",
+            "--export",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert set(data["overall"]["toy"].keys()) == {
+        "torch-normalized",
+        "torch-raw",
+        "length-normalized",
+        "smollm2-prompting",
+    }
+
+
+def test_cli_all_datasets_includes_runtime_registered_datasets(tmp_path):
+    dataset_path = tmp_path / "toy.jsonl"
+    output_dir = tmp_path / "out"
+    _write_jsonl(dataset_path, _SAMPLE_ROWS)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--all-datasets",
+            "--model",
+            "length-normalized",
+            "--export",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert set(data["overall"].keys()) == {"gede", "toy"}
+
+
+def test_cli_all_shortcut_enables_all_datasets_and_models(tmp_path, monkeypatch):
+    def fake_build_model(name: str, ood_margin: float, seed: int):
+        if name == "smollm2-prompting":
+            return LengthHeuristicStubDetector(name, normalized_scores=True, ood_margin=ood_margin, seed=seed)
+        return registry_build_model(name, ood_margin=ood_margin, seed=seed)
+
+    dataset_path = tmp_path / "toy.jsonl"
+    output_dir = tmp_path / "out"
+    _write_jsonl(dataset_path, _SAMPLE_ROWS)
+
+    runner = CliRunner()
+    monkeypatch.setattr(cli_module, "build_model", fake_build_model)
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "-a",
+            "--export",
+            "json",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert set(data["overall"].keys()) == {"gede", "toy"}
+    assert set(data["overall"]["toy"].keys()) == {
+        "torch-normalized",
+        "torch-raw",
+        "length-normalized",
+        "smollm2-prompting",
+    }
 
 
 def test_flatten_helpers():

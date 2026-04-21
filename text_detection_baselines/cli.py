@@ -57,12 +57,16 @@ def _resolve_selection(
     *,
     explicit_names: tuple[str, ...],
     default_names: tuple[str, ...],
+    all_names: tuple[str, ...],
     runtime_names: tuple[str, ...],
     include_defaults: bool,
+    include_all: bool,
 ) -> tuple[str, ...]:
     """Resolve the final ordered selection for a registry-backed CLI option."""
     selected: list[str] = []
-    if include_defaults:
+    if include_all:
+        selected.extend(all_names)
+    elif include_defaults:
         selected.extend(default_names)
     selected.extend(runtime_names)
     selected.extend(explicit_names)
@@ -272,6 +276,23 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     is_flag=True,
     help="Do not include default pre-registered models in the run.",
 )
+@click.option(
+    "--all-datasets",
+    is_flag=True,
+    help="Evaluate on all registered datasets, including any registered at runtime.",
+)
+@click.option(
+    "--all-models",
+    is_flag=True,
+    help="Evaluate on all registered models, including non-default models.",
+)
+@click.option(
+    "--all",
+    "-a",
+    "select_all_flag",
+    is_flag=True,
+    help="Equivalent to specifying both --all-datasets and --all-models.",
+)
 @click.option("--target-alpha", type=float, default=0.05, show_default=True, help="Target FPR for learning tau.")
 @click.option(
     "--output-dir",
@@ -310,6 +331,9 @@ def main(
     runtime_file_datasets: tuple[str, ...],
     no_default_datasets: bool,
     no_default_models: bool,
+    all_datasets: bool,
+    all_models: bool,
+    select_all_flag: bool,
     target_alpha: float,
     output_dir: Path,
     export_formats: tuple[str, ...],
@@ -322,6 +346,9 @@ def main(
     """Evaluate registered text detection models on one or more datasets."""
     if not 0.0 <= target_alpha <= 1.0:
         raise click.BadParameter("target-alpha must be in [0, 1]")
+
+    all_datasets = all_datasets or select_all_flag
+    all_models = all_models or select_all_flag
 
     runtime_dataset_names: list[str] = []
     for item in runtime_file_datasets:
@@ -343,14 +370,18 @@ def main(
     selected_datasets = _resolve_selection(
         explicit_names=datasets,
         default_names=get_default_dataset_names(),
+        all_names=tuple(list_registered_datasets()),
         runtime_names=tuple(runtime_dataset_names),
         include_defaults=not no_default_datasets,
+        include_all=all_datasets,
     )
     selected_models = _resolve_selection(
         explicit_names=models,
         default_names=get_default_model_names(),
+        all_names=tuple(list_registered_models()),
         runtime_names=(),
         include_defaults=not no_default_models,
+        include_all=all_models,
     )
 
     if not selected_datasets:
