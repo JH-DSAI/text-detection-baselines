@@ -1,4 +1,4 @@
-
+{
     "creators": [
         {
             "affiliation": "JHU Data Science and AI Institute",
@@ -10,7 +10,7 @@
         "https://github.com/JH-DSAI/text-detection-baselines TODO/DOI."
     ],
     "description": "TODO",
-    "license": "TODO",
+    "license": "BSD-3-Clause",
     "upload_type": "software",
     "access_right": "open"
 }
