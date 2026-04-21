@@ -19,10 +19,10 @@ To do:
 
 1. Install pixi from <https://pixi.sh/latest/>.
 1. Clone this repository.
-1. Run tests (installing dependencies in a virtual environment):
+1. Run evaluation on default datasets and models (automatically installs dependencies in a virtual environment):
 
 ```bash
-pixi run -e dev test
+pixi run main
 ```
 
 ## Common commands

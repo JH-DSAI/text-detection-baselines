@@ -10,4 +10,4 @@ COPY . .
 
 RUN pixi install --locked
 
-CMD ["pixi", "task", "list"]
+CMD ["pixi", "run", "main"]
