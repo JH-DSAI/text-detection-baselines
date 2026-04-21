@@ -1,3 +1,10 @@
+# Output files
+summary.txt
+metrics.json
+metrics.yaml
+overall-metrics.csv
+per-category-metrics.csv
+
 # Editor swap files
 .*.swp
 .*.swo
