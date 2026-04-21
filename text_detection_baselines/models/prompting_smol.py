@@ -27,9 +27,11 @@ class SmolLMPromptingDetector(StubTextDetector):
         ood_margin: float,
         seed: int,
         hf_model_id: str = "HuggingFaceTB/SmolLM2-135M-Instruct",
+        hf_revision: str = "12fd25f77366fa6b3b4b768ec3050bf629380bac",
     ) -> None:
         super().__init__(model_name, normalized_scores, ood_margin, seed)
         self.hf_model_id = hf_model_id
+        self.hf_revision = hf_revision
         self._tokenizer = None
         self._model = None
         self._device = None
@@ -50,8 +52,8 @@ class SmolLMPromptingDetector(StubTextDetector):
             ) from exc
 
         try:
-            self._tokenizer = AutoTokenizer.from_pretrained(self.hf_model_id)
-            self._model = AutoModelForCausalLM.from_pretrained(self.hf_model_id)
+            self._tokenizer = AutoTokenizer.from_pretrained(self.hf_model_id, revision=self.hf_revision)
+            self._model = AutoModelForCausalLM.from_pretrained(self.hf_model_id, revision=self.hf_revision)
         except Exception as exc:  # pragma: no cover
             raise RuntimeError(f"Could not load huggingface model '{self.hf_model_id}'.") from exc
 

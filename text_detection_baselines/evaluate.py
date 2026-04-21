@@ -48,7 +48,8 @@ class DatasetRecord:
 
 def load_dataset(path: Path, text_key: str, label_key: str, category_key: str) -> list[DatasetRecord]:
     """Compatibility wrapper returning record objects from file-based datasets."""
-    batch = load_dataset_batch(
+    # We are loading a local dataset from JSON and we assume the user trusts it
+    batch = load_dataset_batch(  # nosec: B615[huggingface_unsafe_download]
         dataset_type="file",
         path=path,
         text_key=text_key,
@@ -175,7 +176,8 @@ def evaluate_model_on_dataset(
         contains ``dataset`` or ``model`` keys; those are tracked by the
         caller in the results tree.
     """
-    batch = load_dataset_batch(
+    # We are loading a local dataset from JSON and we assume the user trusts it
+    batch = load_dataset_batch(  # nosec: B615[huggingface_unsafe_download]
         dataset_type="file",
         path=dataset_path,
         text_key=text_key,

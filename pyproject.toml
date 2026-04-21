@@ -123,6 +123,7 @@ pytest = ">=9.0"
 pytest-cov = ">=7.1"
 ruff = ">=0.15"
 mypy = ">=1.20"
+types-pyyaml = ">=6.0.12.20260408, <7"
 
 [tool.pixi.feature.docs.pypi-dependencies]
 sphinx = ">=9.0"
