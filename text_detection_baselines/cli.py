@@ -290,8 +290,9 @@ def main(
             export_formats=tuple(fmt.lower() for fmt in export_formats),
             tree=tree,
         )
+        LOGGER.info("Results saved to %s", output_dir)
 
-    LOGGER.info("Evaluation complete. Results saved to %s", output_dir)
+    LOGGER.info("Evaluation complete")
 
 
 if __name__ == "__main__":
