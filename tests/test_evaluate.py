@@ -230,9 +230,9 @@ def test_build_results_tree_structure():
     tree = build_results_tree(results)
 
     assert "overall" in tree
-    assert "per_category" in tree
+    assert "per-category" in tree
     assert tree["overall"]["ds1"]["model-a"]["auroc"] == 0.8
     assert tree["overall"]["ds1"]["model-b"]["auroc"] == 0.75
-    assert tree["per_category"]["ds1"]["Cat1"]["model-a"]["tpr_at_tau"] == 0.9
-    assert tree["per_category"]["ds1"]["Cat2"]["model-a"]["tpr_at_tau"] == 0.5
-    assert tree["per_category"]["ds1"]["Cat1"]["model-b"]["tpr_at_tau"] == 0.6
+    assert tree["per-category"]["ds1"]["Cat1"]["model-a"]["tpr_at_tau"] == 0.9
+    assert tree["per-category"]["ds1"]["Cat2"]["model-a"]["tpr_at_tau"] == 0.5
+    assert tree["per-category"]["ds1"]["Cat1"]["model-b"]["tpr_at_tau"] == 0.6

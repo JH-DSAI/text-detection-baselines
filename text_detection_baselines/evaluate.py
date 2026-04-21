@@ -226,7 +226,7 @@ def build_results_tree(
                 "<dataset>": {"<model>": {<metrics>}, ...},
                 ...
               },
-              "per_category": {
+              "per-category": {
                 "<dataset>": {
                   "<category>": {"<model>": {<metrics>}, ...},
                   ...
@@ -235,12 +235,12 @@ def build_results_tree(
               },
             }
     """
-    tree: dict[str, Any] = {"overall": {}, "per_category": {}}
+    tree: dict[str, Any] = {"overall": {}, "per-category": {}}
 
     for dataset_name, model_name, overall, per_cat in results:
         tree["overall"].setdefault(dataset_name, {})[model_name] = overall
 
         for category, cat_metrics in per_cat.items():
-            tree["per_category"].setdefault(dataset_name, {}).setdefault(category, {})[model_name] = cat_metrics
+            tree["per-category"].setdefault(dataset_name, {}).setdefault(category, {})[model_name] = cat_metrics
 
     return tree

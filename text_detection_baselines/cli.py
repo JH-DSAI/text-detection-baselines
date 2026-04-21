@@ -140,7 +140,7 @@ def _flatten_overall(tree: dict[str, Any]) -> list[dict[str, Any]]:
 def _flatten_per_category(tree: dict[str, Any]) -> list[dict[str, Any]]:
     """Return a flat list of per-category-metric rows."""
     rows = []
-    for dataset, cats in tree.get("per_category", {}).items():
+    for dataset, cats in tree.get("per-category", {}).items():
         for category, models in cats.items():
             for model, metrics in models.items():
                 rows.append({"dataset": dataset, "category": category, "model": model, **metrics})

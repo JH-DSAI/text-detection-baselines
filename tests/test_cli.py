@@ -110,10 +110,10 @@ def test_cli_json_export_structure(tmp_path):
     assert metrics_file.exists()
     data = json.loads(metrics_file.read_text(encoding="utf-8"))
     assert "overall" in data
-    assert "per_category" in data
+    assert "per-category" in data
     assert "toy" in data["overall"]
     assert "length-normalized" in data["overall"]["toy"]
-    assert "toy" in data["per_category"]
+    assert "toy" in data["per-category"]
 
 
 def test_cli_yaml_export(tmp_path):
@@ -206,7 +206,7 @@ def test_cli_runtime_dataset_registration_uses_default_models(tmp_path):
 def test_flatten_helpers():
     tree = {
         "overall": {"ds1": {"model-a": {"auroc": 0.8}}},
-        "per_category": {"ds1": {"Cat1": {"model-a": {"tpr_at_tau": 0.9}}}},
+        "per-category": {"ds1": {"Cat1": {"model-a": {"tpr_at_tau": 0.9}}}},
     }
     overall_rows = _flatten_overall(tree)
     assert len(overall_rows) == 1
