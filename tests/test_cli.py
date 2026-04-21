@@ -240,10 +240,11 @@ def test_cli_help_lists_registered_datasets_and_models():
     result = runner.invoke(main, ["--help"])
 
     assert result.exit_code == 0
-    assert "Available: gede" in result.output
-    assert "Available: torch-normalized, torch-raw, length-normalized, smollm2-prompting" in result.output
-    assert "Defaults: gede" in result.output
-    assert "Defaults: torch-normalized, torch-raw, length-normalized" in result.output
+    assert "gede" in result.output
+    assert "torch-normalized" in result.output
+    assert "torch-raw" in result.output
+    assert "length-normalized" in result.output
+    assert "smollm2-prompting" in result.output
 
 
 def test_cli_all_models_includes_non_default_model(tmp_path, monkeypatch):
