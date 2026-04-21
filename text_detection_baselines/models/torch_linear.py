@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 
 from .base import StubModelOutput, StubTextDetector
 
+torch: Any
+nn: Any
 try:
     import torch
     from torch import nn

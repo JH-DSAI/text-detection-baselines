@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import numpy as np
 
 from .base import StubModelOutput, StubTextDetector
 
+torch: Any
 try:
     import torch
 except ImportError:  # pragma: no cover
@@ -32,9 +35,9 @@ class SmolLMPromptingDetector(StubTextDetector):
         super().__init__(model_name, normalized_scores, ood_margin, seed)
         self.hf_model_id = hf_model_id
         self.hf_revision = hf_revision
-        self._tokenizer = None
-        self._model = None
-        self._device = None
+        self._tokenizer: Any | None = None
+        self._model: Any | None = None
+        self._device: str = "cpu"
 
     def _ensure_backend(self) -> None:
         if self._tokenizer is not None and self._model is not None:
@@ -58,8 +61,9 @@ class SmolLMPromptingDetector(StubTextDetector):
             raise RuntimeError(f"Could not load huggingface model '{self.hf_model_id}'.") from exc
 
         self._device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        self._model.to(self._device)
-        self._model.eval()
+        model = cast(Any, self._model)
+        model.to(self._device)
+        model.eval()
 
     def _build_prompt(self, text: str) -> str:
         return (
@@ -68,7 +72,8 @@ class SmolLMPromptingDetector(StubTextDetector):
             f"Text:\n{text}\n\nLabel:"
         )
 
-    def _sequence_logprob(self, prompt_ids, candidate_ids) -> float:
+    def _sequence_logprob(self, prompt_ids: Any, candidate_ids: Any) -> float:
+        assert self._model is not None
         full_ids = torch.cat([prompt_ids, candidate_ids], dim=1)
         with torch.no_grad():
             logits = self._model(full_ids).logits
@@ -84,6 +89,7 @@ class SmolLMPromptingDetector(StubTextDetector):
 
     def _score_single(self, text: str) -> float:
         self._ensure_backend()
+        assert self._tokenizer is not None
 
         prompt = self._build_prompt(text)
         prompt_ids = self._tokenizer(prompt, return_tensors="pt", add_special_tokens=True).to(self._device).input_ids
