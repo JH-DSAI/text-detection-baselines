@@ -10,11 +10,9 @@ from text_detection_baselines.cli import _flatten_overall, _flatten_per_category
 
 
 def _write_jsonl(path, rows):
-    import json as _json
-
     with path.open("w", encoding="utf-8") as fh:
         for row in rows:
-            fh.write(_json.dumps(row) + "\n")
+            fh.write(json.dumps(row) + "\n")
 
 
 _SAMPLE_ROWS = [
@@ -178,6 +176,60 @@ def test_cli_runtime_dataset_registration_uses_default_models(tmp_path):
     assert result.exit_code == 0, result.output
     data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
     assert set(data["overall"]["toy"].keys()) == {"torch-normalized", "torch-raw", "length-normalized"}
+
+
+def test_cli_runtime_dataset_without_preregistered_defaults(tmp_path):
+    dataset_path = tmp_path / "toy.jsonl"
+    output_dir = tmp_path / "out"
+    _write_jsonl(dataset_path, _SAMPLE_ROWS)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--no-default-datasets",
+            "--model",
+            "length-normalized",
+            "--output-dir",
+            str(output_dir),
+            "--export",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert set(data["overall"].keys()) == {"toy"}
+
+
+def test_cli_no_default_models_requires_explicit_selection(tmp_path):
+    dataset_path = tmp_path / "toy.jsonl"
+    _write_jsonl(dataset_path, _SAMPLE_ROWS)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--no-default-models",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "No models selected" in result.output
+
+
+def test_cli_no_default_datasets_requires_some_selection():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--no-default-datasets", "--model", "length-normalized"])
+
+    assert result.exit_code != 0
+    assert "No datasets selected" in result.output
 
 
 def test_flatten_helpers():

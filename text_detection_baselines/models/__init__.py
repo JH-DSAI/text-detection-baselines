@@ -11,18 +11,18 @@ from .prompting_smol import SmolLMPromptingDetector
 from .torch_linear import TorchLinearStubDetector
 
 __all__ = [
-    "LengthHeuristicStubDetector",
-    "StubModelOutput",
-    "StubTextDetector",
-    "TorchLinearStubDetector",
-    "MODEL_REGISTRY",
-    "ModelSpec",
-    "SmolLMPromptingDetector",
     "build_model",
     "build_stub_model",
     "get_default_model_names",
+    "LengthHeuristicStubDetector",
     "list_registered_models",
+    "MODEL_REGISTRY",
+    "ModelSpec",
     "register_model",
+    "SmolLMPromptingDetector",
+    "StubModelOutput",
+    "StubTextDetector",
+    "TorchLinearStubDetector",
 ]
 
 
@@ -101,7 +101,7 @@ def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector
 register_model("torch-normalized", _torch_normalized_factory)
 register_model("torch-raw", _torch_raw_factory)
 register_model("length-normalized", _length_normalized_factory)
-register_model("smollm2-prompting", _smollm2_prompting_factory)
+register_model("smollm2-prompting", _smollm2_prompting_factory, is_default=False)
 
 
 def build_stub_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:

@@ -35,6 +35,35 @@ from .models import build_model, get_default_model_names, list_registered_models
 LOGGER = logging.getLogger(__name__)
 
 
+def _unique_preserve_order(names: list[str]) -> tuple[str, ...]:
+    """Return de-duplicated names while preserving first-seen order."""
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for name in names:
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(name)
+    return tuple(ordered)
+
+
+def _resolve_selection(
+    *,
+    explicit_names: tuple[str, ...],
+    default_names: tuple[str, ...],
+    runtime_names: tuple[str, ...],
+    include_defaults: bool,
+) -> tuple[str, ...]:
+    """Resolve the final ordered selection for a registry-backed CLI option."""
+    selected: list[str] = []
+    if include_defaults:
+        selected.extend(default_names)
+    selected.extend(runtime_names)
+    selected.extend(explicit_names)
+    return _unique_preserve_order(selected)
+
+
 # ---------------------------------------------------------------------------
 # Console rendering
 # ---------------------------------------------------------------------------
@@ -119,8 +148,6 @@ def render_console_tables(tree: dict[str, Any]) -> None:
         per_cat_table.add_row(*cells)
 
     console.print(per_cat_table)
-
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +251,16 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     multiple=True,
     help="Register file dataset at runtime as NAME=PATH. Repeatable.",
 )
+@click.option(
+    "--no-default-datasets",
+    is_flag=True,
+    help="Do not include default pre-registered datasets in the run.",
+)
+@click.option(
+    "--no-default-models",
+    is_flag=True,
+    help="Do not include default pre-registered models in the run.",
+)
 @click.option("--target-alpha", type=float, default=0.05, show_default=True, help="Target FPR for learning tau.")
 @click.option(
     "--output-dir",
@@ -260,6 +297,8 @@ def main(
     datasets: tuple[str, ...],
     models: tuple[str, ...],
     runtime_file_datasets: tuple[str, ...],
+    no_default_datasets: bool,
+    no_default_models: bool,
     target_alpha: float,
     output_dir: Path,
     export_formats: tuple[str, ...],
@@ -273,6 +312,7 @@ def main(
     if not 0.0 <= target_alpha <= 1.0:
         raise click.BadParameter("target-alpha must be in [0, 1]")
 
+    runtime_dataset_names: list[str] = []
     for item in runtime_file_datasets:
         if "=" not in item:
             raise click.BadParameter(
@@ -287,9 +327,30 @@ def main(
                 param_hint="--register-file-dataset",
             )
         register_file_dataset(name=name, path=dataset_path)
+        runtime_dataset_names.append(name)
 
-    selected_datasets = tuple(datasets) if datasets else get_default_dataset_names()
-    selected_models = tuple(models) if models else get_default_model_names()
+    selected_datasets = _resolve_selection(
+        explicit_names=datasets,
+        default_names=get_default_dataset_names(),
+        runtime_names=tuple(runtime_dataset_names),
+        include_defaults=not no_default_datasets,
+    )
+    selected_models = _resolve_selection(
+        explicit_names=models,
+        default_names=get_default_model_names(),
+        runtime_names=(),
+        include_defaults=not no_default_models,
+    )
+
+    if not selected_datasets:
+        raise click.BadParameter(
+            "No datasets selected. Use --dataset and/or --register-file-dataset, or omit --no-default-datasets.",
+        )
+
+    if not selected_models:
+        raise click.BadParameter(
+            "No models selected. Use --model, or omit --no-default-models.",
+        )
 
     unknown_datasets = [name for name in selected_datasets if name.lower() not in set(list_registered_datasets())]
     if unknown_datasets:
