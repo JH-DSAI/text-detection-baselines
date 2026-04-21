@@ -159,7 +159,7 @@ test-py311 = { features = ["dev", "py311"], solve-group = "test-py311" }
 test-py312 = { features = ["dev", "py312"], solve-group = "test-py312" }
 test-py313 = { features = ["dev", "py313"], solve-group = "test-py313" }
 test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
-cuda = { features = ["cuda"], solve-group = "default" }
+cuda = { features = ["cuda"] }
 
 [tool.pixi.tasks]
 check-style = "ruff format --check . && ruff check ."
