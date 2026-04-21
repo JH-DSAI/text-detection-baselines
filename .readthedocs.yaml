@@ -7,9 +7,10 @@ version: 2
 
 python:
   install:
-    - requirements: requirements/docs.txt
     - method: pip
       path: .
+      extra_requirements:
+        - docs
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
