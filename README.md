@@ -4,8 +4,16 @@
 [![Documentation Status](https://readthedocs.org/projects/text-detection-baselines/badge/?version=latest)](https://text-detection-baselines.readthedocs.io/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/JH-DSAI/text-detection-baselines/graph/badge.svg?token=meQRW4r7mP)](https://codecov.io/gh/JH-DSAI/text-detection-baselines)
 [![Security](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml)
+<!-- [![DOI](https://zenodo.org/badge/DOI/REPLACE/ME.svg)](https://doi.org/REPLACE/ME) -->
 
 Benchmarking suite for machine text detection.
+
+To do:
+
+* Uncomment and update the DOI above in this README.
+* Import package into [readthedocs](https://readthedocs.org/).
+* Update [.zenodo.json](.zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
+* Update quickstart guide below.
 
 ## Quickstart (pixi)
 
@@ -69,5 +77,5 @@ chmod +x .git/hooks/pre-push
 
 ## Notes
 
-- CI, security, docs, and distribution workflows use pixi tasks.
-- Read the Docs installs documentation dependencies from project extras.
+* CI, security, docs, and distribution workflows use pixi tasks.
+* Read the Docs installs documentation dependencies from project extras.
