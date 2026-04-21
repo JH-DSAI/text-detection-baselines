@@ -12,10 +12,8 @@ from text_detection_baselines.evaluate import (
     build_results_tree,
     evaluate_model_on_dataset,
     evaluate_predictions,
-    expected_calibration_error,
     load_dataset,
     normalize_label,
-    safe_round,
 )
 from text_detection_baselines.models import build_stub_model
 from text_detection_baselines.models.base import StubModelOutput
@@ -111,30 +109,6 @@ def test_load_dataset_empty_raises(tmp_path):
     p.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="empty"):
         load_dataset(p, text_key="answer", label_key="label", category_key="contribution_level")
-
-
-# ---------------------------------------------------------------------------
-# safe_round / expected_calibration_error
-# ---------------------------------------------------------------------------
-
-
-def test_safe_round_none():
-    assert safe_round(None) is None
-
-
-def test_safe_round_nan():
-    assert safe_round(float("nan")) is None
-
-
-def test_safe_round_value():
-    assert safe_round(0.123456, 4) == 0.1235
-
-
-def test_expected_calibration_error_range():
-    scores = np.array([0.1, 0.9])
-    labels = np.array([0, 1])
-    ece = expected_calibration_error(scores, labels, bins=10)
-    assert 0.0 <= ece <= 1.0
 
 
 # ---------------------------------------------------------------------------

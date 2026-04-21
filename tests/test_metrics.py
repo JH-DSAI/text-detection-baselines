@@ -5,7 +5,13 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from text_detection_baselines.metrics import METRIC_REGISTRY, list_registered_metrics, register_metric, run_all_metrics
+from text_detection_baselines.metrics import (
+    METRIC_REGISTRY,
+    list_registered_metrics,
+    register_metric,
+    run_all_metrics,
+    safe_round,
+)
 from text_detection_baselines.metrics.calibration import brier_metric, ece_metric, expected_calibration_error
 from text_detection_baselines.metrics.detection import (
     auroc_metric,
@@ -104,3 +110,20 @@ def test_run_all_metrics_skips_normalized_only_for_raw(metric_inputs):
     assert "brier" not in results
     assert "ece" not in results
     assert "auroc" in results
+
+
+# ---------------------------------------------------------------------------
+# safe_round / expected_calibration_error
+# ---------------------------------------------------------------------------
+
+
+def test_safe_round_none():
+    assert safe_round(None) is None
+
+
+def test_safe_round_nan():
+    assert safe_round(float("nan")) is None
+
+
+def test_safe_round_value():
+    assert safe_round(0.123456, 4) == 0.1235
