@@ -16840,13 +16840,12 @@ packages:
   timestamp: 1767886839029
 - pypi: ./
   name: text-detection-baselines
-  version: 0.1.dev64+g0ee82ec96.d20260421
-  sha256: 71d7298bf50d83cb2b2ec1bfde785c677d0327c6636bf8d7a178d958b4813abb
+  version: 0.1.dev66+ga81de2d7a.d20260421
+  sha256: c24951126b195ac2faf1d711113c738b35f1504b1e65f513147a74e106606afd
   requires_dist:
   - click>=8.3.2,<9
   - pyyaml>=6.0.3,<7
   - rich>=15.0.0,<16
-  - transformers>=4.44,<5
   - bandit>=1.7 ; extra == 'dev'
   - build ; extra == 'dev'
   - hatch-vcs>=0.4 ; extra == 'dev'
