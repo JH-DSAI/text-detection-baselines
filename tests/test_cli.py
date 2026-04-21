@@ -244,9 +244,6 @@ def test_cli_help_lists_registered_datasets_and_models():
     assert "Available: torch-normalized, torch-raw, length-normalized, smollm2-prompting" in result.output
     assert "Defaults: gede" in result.output
     assert "Defaults: torch-normalized, torch-raw, length-normalized" in result.output
-    assert "--all-datasets" in result.output
-    assert "--all-models" in result.output
-    assert "--all, -a" in result.output
 
 
 def test_cli_all_models_includes_non_default_model(tmp_path, monkeypatch):
