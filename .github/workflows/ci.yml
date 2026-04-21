@@ -24,9 +24,6 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
           cache: true
-      - name: Install dev environment
-        run: pixi install -e dev
-        shell: bash
       - name: Lint
         run: pixi run -e dev check-style
         shell: bash
@@ -49,9 +46,6 @@ jobs:
       uses: prefix-dev/setup-pixi@v0.8.14
       with:
           cache: true
-    - name: Install matrix test environment
-      run: pixi install -e test-py${PYTHON//./}
-      shell: bash
     - name: Test with pixi (pytest)
       run: pixi run -e test-py${PYTHON//./} test
     # Only save & upload coverage once
@@ -84,9 +78,6 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
           cache: true
-      - name: Install docs environment
-        run: pixi install -e docs
-        shell: bash
       - name: Build sphinx docs.
         run: pixi run -e docs build-docs
         shell: bash

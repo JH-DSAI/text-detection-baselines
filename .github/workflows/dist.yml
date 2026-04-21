@@ -13,9 +13,6 @@ jobs:
       uses: prefix-dev/setup-pixi@v0.8.14
       with:
         cache: true
-    - name: Install dist environment
-      run: pixi install -e dist
-      shell: bash
     - name: Build a binary wheel and a source tarball
       run: pixi run -e dist build-dist
     - name: Store the distribution packages
