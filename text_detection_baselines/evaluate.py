@@ -32,7 +32,6 @@ import numpy as np
 from .datasets import load_dataset as load_dataset_batch
 from .datasets.file import normalize_label as normalize_label_value
 from .metrics import run_all_metrics, safe_round
-from .metrics.calibration import expected_calibration_error
 from .models.base import StubModelOutput, StubTextDetector
 
 LOGGER = logging.getLogger(__name__)

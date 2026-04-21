@@ -55,19 +55,6 @@ exclude_dirs = ["tests"]
 
 [tool.ruff]
 line-length = 120
-lint.select = ["ALL"]
-lint.ignore = [
-    "ANN002",  # https://docs.astral.sh/ruff/rules/missing-type-args/
-    "ANN003",  # https://docs.astral.sh/ruff/rules/missing-type-kwargs/
-    "ANN401",  # https://docs.astral.sh/ruff/rules/any-type/
-    "PLR0913",  # https://docs.astral.sh/ruff/rules/too-many-arguments/
-    "EM101",  # https://docs.astral.sh/ruff/rules/raw-string-in-exception/
-    "EM102",  # https://docs.astral.sh/ruff/rules/f-string-in-exception/
-    "TRY003",  # https://docs.astral.sh/ruff/rules/raise-vanilla-args/
-    "D407",  # https://docs.astral.sh/ruff/rules/dashed-underline-after-section/
-    "COM812", # https://docs.astral.sh/ruff/rules/missing-trailing-comma/
-    "ISC001", # https://docs.astral.sh/ruff/rules/single-line-implicit-string-concatenation/
-]
 exclude = [
     ".bzr",
     ".direnv",
@@ -174,10 +161,11 @@ test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
 cuda = { features = ["cuda"], solve-group = "default" }
 
 [tool.pixi.tasks]
-check-style = "ruff format . --check && ruff check ."
+check-style = "ruff format --check . && ruff check ."
 check-security = "bandit -c pyproject.toml --severity-level=medium -r text_detection_baselines"
 check-types = "mypy"
 format = "ruff format . && ruff check --select I --fix ."
+fix = "ruff check --fix ."
 test = "pytest --cov=text_detection_baselines --cov-report=html:coverage.html --cov-report=xml:coverage.xml"
 build-docs = "cd docs && make clean html latex epub"
 build-dist = "python -m build"
