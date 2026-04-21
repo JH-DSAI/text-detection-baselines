@@ -12,7 +12,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-
 MetricFunc = Callable[
     [np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, float],
     float | None,

@@ -29,9 +29,21 @@ def _write_jsonl(path, rows):
 
 _SAMPLE_ROWS = [
     {"answer": "short human text", "label": "real", "contribution_level": "Human"},
-    {"answer": "this human sample is much longer and varied in style to look natural indeed", "label": "real", "contribution_level": "Human"},
-    {"answer": "machine generated response with repeated repeated repeated patterns patterns", "label": "fake", "contribution_level": "Summary"},
-    {"answer": "another synthetic answer that has a different shape and sentence cadence entirely", "label": "fake", "contribution_level": "Task"},
+    {
+        "answer": "this human sample is much longer and varied in style to look natural indeed",
+        "label": "real",
+        "contribution_level": "Human",
+    },
+    {
+        "answer": "machine generated response with repeated repeated repeated patterns patterns",
+        "label": "fake",
+        "contribution_level": "Summary",
+    },
+    {
+        "answer": "another synthetic answer that has a different shape and sentence cadence entirely",
+        "label": "fake",
+        "contribution_level": "Task",
+    },
 ]
 
 

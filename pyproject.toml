@@ -179,6 +179,6 @@ format = "ruff format . && ruff check --select I --fix ."
 test = "pytest --cov=./ --cov-report=html:coverage.html --cov-report=xml:coverage.xml"
 build-docs = "cd docs && make clean html latex epub"
 build-dist = "python -m build"
-main = "python -m text_detection_baselines.cli --dataset tests/data/test_single_doc_per_author.json --model length-normalized --output-dir evaluation_results"
+main = "python -m text_detection_baselines.cli"
 lint = { depends-on = ["check-style", "check-security", "check-types"] }
 ci = { depends-on = ["lint", "test"] }

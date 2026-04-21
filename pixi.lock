@@ -14739,8 +14739,8 @@ packages:
   timestamp: 1767886839029
 - pypi: ./
   name: text-detection-baselines
-  version: 0.1.dev38+g9476d07f8.d20260421
-  sha256: a44f47aed8496a04e495a0a99ce9e9ab0342bdbb469e23184afa7a637b8b7e3c
+  version: 0.1.dev43+g2b2ec6b3b.d20260421
+  sha256: a105bc536a889a106f3517a3e7ad4083263dee084c339f2573225bb45e72e1a0
   requires_dist:
   - click>=8.3.2,<9
   - pyyaml>=6.0.3,<7

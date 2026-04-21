@@ -6,11 +6,12 @@ import json
 
 from click.testing import CliRunner
 
-from text_detection_baselines.cli import main, _flatten_overall, _flatten_per_category
+from text_detection_baselines.cli import _flatten_overall, _flatten_per_category, main
 
 
 def _write_jsonl(path, rows):
     import json as _json
+
     with path.open("w", encoding="utf-8") as fh:
         for row in rows:
             fh.write(_json.dumps(row) + "\n")
@@ -19,8 +20,16 @@ def _write_jsonl(path, rows):
 _SAMPLE_ROWS = [
     {"answer": "human text one with varied words and structure", "label": "real", "contribution_level": "Human"},
     {"answer": "human text two with punctuation, grammar, and detail!", "label": "real", "contribution_level": "Human"},
-    {"answer": "machine answer one has repeated repeated words in this sentence here", "label": "fake", "contribution_level": "Summary"},
-    {"answer": "machine answer two has repeated repeated patterns and extra length added", "label": "fake", "contribution_level": "Task"},
+    {
+        "answer": "machine answer one has repeated repeated words in this sentence here",
+        "label": "fake",
+        "contribution_level": "Summary",
+    },
+    {
+        "answer": "machine answer two has repeated repeated patterns and extra length added",
+        "label": "fake",
+        "contribution_level": "Task",
+    },
 ]
 
 
@@ -30,11 +39,19 @@ def test_cli_does_not_write_summary_txt(tmp_path):
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
 
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "--dataset", str(dataset_path),
-        "--model", "length-normalized",
-        "--output-dir", str(output_dir),
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--model",
+            "length-normalized",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
     assert result.exit_code == 0, result.output
     assert not (output_dir / "summary.txt").exists()
 
@@ -45,13 +62,23 @@ def test_cli_csv_export(tmp_path):
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
 
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "--dataset", str(dataset_path),
-        "--model", "length-normalized",
-        "--model", "torch-raw",
-        "--output-dir", str(output_dir),
-        "--export", "csv",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--model",
+            "length-normalized",
+            "--model",
+            "torch-raw",
+            "--output-dir",
+            str(output_dir),
+            "--export",
+            "csv",
+        ],
+    )
     assert result.exit_code == 0, result.output
     assert (output_dir / "overall-metrics.csv").exists()
     assert (output_dir / "per-category-metrics.csv").exists()
@@ -63,12 +90,21 @@ def test_cli_json_export_structure(tmp_path):
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
 
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "--dataset", str(dataset_path),
-        "--model", "length-normalized",
-        "--output-dir", str(output_dir),
-        "--export", "json",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--model",
+            "length-normalized",
+            "--output-dir",
+            str(output_dir),
+            "--export",
+            "json",
+        ],
+    )
     assert result.exit_code == 0, result.output
     metrics_file = output_dir / "metrics.json"
     assert metrics_file.exists()
@@ -86,12 +122,21 @@ def test_cli_yaml_export(tmp_path):
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
 
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "--dataset", str(dataset_path),
-        "--model", "length-normalized",
-        "--output-dir", str(output_dir),
-        "--export", "yaml",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--model",
+            "length-normalized",
+            "--output-dir",
+            str(output_dir),
+            "--export",
+            "yaml",
+        ],
+    )
     assert result.exit_code == 0, result.output
     assert (output_dir / "metrics.yaml").exists()
 
@@ -104,20 +149,58 @@ def test_cli_multiple_datasets_and_models(tmp_path):
     _write_jsonl(ds2, _SAMPLE_ROWS)
 
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "--dataset", str(ds1),
-        "--dataset", str(ds2),
-        "--model", "length-normalized",
-        "--model", "torch-raw",
-        "--output-dir", str(output_dir),
-        "--export", "json",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"ds1={ds1}",
+            "--register-file-dataset",
+            f"ds2={ds2}",
+            "--dataset",
+            "ds1",
+            "--dataset",
+            "ds2",
+            "--model",
+            "length-normalized",
+            "--model",
+            "torch-raw",
+            "--output-dir",
+            str(output_dir),
+            "--export",
+            "json",
+        ],
+    )
     assert result.exit_code == 0, result.output
     data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
     assert "ds1" in data["overall"]
     assert "ds2" in data["overall"]
     assert "length-normalized" in data["overall"]["ds1"]
     assert "torch-raw" in data["overall"]["ds1"]
+
+
+def test_cli_runtime_dataset_registration_uses_default_models(tmp_path):
+    dataset_path = tmp_path / "toy.jsonl"
+    output_dir = tmp_path / "out"
+    _write_jsonl(dataset_path, _SAMPLE_ROWS)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"toy={dataset_path}",
+            "--dataset",
+            "toy",
+            "--output-dir",
+            str(output_dir),
+            "--export",
+            "json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    data = json.loads((output_dir / "metrics.json").read_text(encoding="utf-8"))
+    assert set(data["overall"]["toy"].keys()) == {"torch-normalized", "torch-raw", "length-normalized"}
 
 
 def test_flatten_helpers():

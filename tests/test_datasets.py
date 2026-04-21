@@ -7,7 +7,13 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from text_detection_baselines.datasets import load_dataset
+from text_detection_baselines.datasets import (
+    get_dataset_spec,
+    get_default_dataset_names,
+    list_registered_datasets,
+    load_dataset,
+    register_file_dataset,
+)
 from text_detection_baselines.datasets.file import FileDatasetBatch, load_file_dataset
 
 
@@ -51,3 +57,32 @@ def test_dataset_dispatch_unknown_type_raises():
             label_key="label",
             category_key="contribution_level",
         )
+
+
+def test_default_dataset_registry_contains_gede():
+    names = list_registered_datasets()
+    assert "gede" in names
+    assert get_default_dataset_names() == ("gede",)
+    spec = get_dataset_spec("GEDE")
+    assert spec.name == "gede"
+
+
+def test_register_file_dataset_runtime(tmp_path):
+    path = tmp_path / "runtime.jsonl"
+    path.write_text(
+        '{"answer":"a","label":"real","contribution_level":"Human"}\n'
+        '{"answer":"b","label":"fake","contribution_level":"Task"}\n',
+        encoding="utf-8",
+    )
+
+    register_file_dataset(name="runtime-test", path=path)
+    spec = get_dataset_spec("runtime-test")
+    assert spec.path == path
+    batch = load_dataset(
+        dataset_type=spec.dataset_type,
+        path=spec.path,
+        text_key=spec.text_key,
+        label_key=spec.label_key,
+        category_key=spec.category_key,
+    )
+    assert len(batch) == 2

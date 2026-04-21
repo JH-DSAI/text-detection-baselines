@@ -23,8 +23,14 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 
+from .datasets import (
+    get_dataset_spec,
+    get_default_dataset_names,
+    list_registered_datasets,
+    register_file_dataset,
+)
 from .evaluate import build_results_tree, evaluate_model_on_dataset
-from .models import build_stub_model
+from .models import build_model, get_default_model_names, list_registered_models
 
 LOGGER = logging.getLogger(__name__)
 
@@ -200,18 +206,23 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 @click.option(
     "--dataset",
     "datasets",
-    type=click.Path(path_type=Path, exists=True),
+    type=str,
     multiple=True,
-    required=True,
-    help="Path to JSONL dataset. Repeat to evaluate multiple datasets.",
+    help="Registered dataset name to evaluate. Repeat to evaluate multiple datasets.",
 )
 @click.option(
     "--model",
     "models",
-    type=click.Choice(["torch-normalized", "torch-raw", "length-normalized"], case_sensitive=False),
+    type=str,
     multiple=True,
-    required=True,
-    help="Model stub to evaluate. Repeat to evaluate multiple models.",
+    help="Registered model name to evaluate. Repeat to evaluate multiple models.",
+)
+@click.option(
+    "--register-file-dataset",
+    "runtime_file_datasets",
+    type=str,
+    multiple=True,
+    help="Register file dataset at runtime as NAME=PATH. Repeatable.",
 )
 @click.option("--target-alpha", type=float, default=0.05, show_default=True, help="Target FPR for learning tau.")
 @click.option(
@@ -246,8 +257,9 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     help="Uncertainty margin for OOD flagging.",
 )
 def main(
-    datasets: tuple[Path, ...],
+    datasets: tuple[str, ...],
     models: tuple[str, ...],
+    runtime_file_datasets: tuple[str, ...],
     target_alpha: float,
     output_dir: Path,
     export_formats: tuple[str, ...],
@@ -257,29 +269,58 @@ def main(
     seed: int,
     ood_margin: float,
 ) -> None:
-    """Evaluate text detection model stubs on one or more datasets."""
+    """Evaluate registered text detection models on one or more datasets."""
     if not 0.0 <= target_alpha <= 1.0:
         raise click.BadParameter("target-alpha must be in [0, 1]")
+
+    for item in runtime_file_datasets:
+        if "=" not in item:
+            raise click.BadParameter(
+                "register-file-dataset entries must look like NAME=PATH",
+                param_hint="--register-file-dataset",
+            )
+        name, raw_path = item.split("=", 1)
+        dataset_path = Path(raw_path).expanduser()
+        if not dataset_path.exists():
+            raise click.BadParameter(
+                f"Dataset path does not exist: {dataset_path}",
+                param_hint="--register-file-dataset",
+            )
+        register_file_dataset(name=name, path=dataset_path)
+
+    selected_datasets = tuple(datasets) if datasets else get_default_dataset_names()
+    selected_models = tuple(models) if models else get_default_model_names()
+
+    unknown_datasets = [name for name in selected_datasets if name.lower() not in set(list_registered_datasets())]
+    if unknown_datasets:
+        valid = ", ".join(list_registered_datasets())
+        raise click.BadParameter(f"Unknown dataset(s): {', '.join(unknown_datasets)}. Valid options: {valid}")
+
+    unknown_models = [name for name in selected_models if name.lower() not in set(list_registered_models())]
+    if unknown_models:
+        valid = ", ".join(list_registered_models())
+        raise click.BadParameter(f"Unknown model(s): {', '.join(unknown_models)}. Valid options: {valid}")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    model_objs = [build_stub_model(name.lower(), ood_margin=ood_margin, seed=seed) for name in models]
+    model_objs = [build_model(name, ood_margin=ood_margin, seed=seed) for name in selected_models]
 
     run_results: list[tuple[str, str, dict, dict]] = []
 
-    for dataset_path in datasets:
+    for dataset_name in selected_datasets:
+        dataset = get_dataset_spec(dataset_name)
         for model in model_objs:
-            LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset_path)
+            LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset.name)
             overall, per_cat = evaluate_model_on_dataset(
-                dataset_path=dataset_path,
+                dataset_path=dataset.path,
                 model=model,
                 target_alpha=target_alpha,
-                text_key=text_key,
-                label_key=label_key,
-                category_key=category_key,
+                text_key=dataset.text_key or text_key,
+                label_key=dataset.label_key or label_key,
+                category_key=dataset.category_key or category_key,
             )
-            run_results.append((dataset_path.stem, model.model_name, overall, per_cat))
+            run_results.append((dataset.name, model.model_name, overall, per_cat))
 
     tree = build_results_tree(run_results)
     render_console_tables(tree)
