@@ -43,14 +43,14 @@ def _fmt(value: Any) -> str:
     return str(value)
 
 
-def render_console_tables(tree: dict[str, Any]) -> str:
+def render_console_tables(tree: dict[str, Any]) -> None:
     """Render overall and per-category metrics as rich tables.
 
     Args:
         tree: Nested results dict produced by :func:`build_results_tree`.
 
     Returns:
-        Plain-text representation of all tables (for writing to summary.txt).
+        None. Tables are printed to the active console.
     """
     console = Console(record=True)
 
@@ -114,7 +114,7 @@ def render_console_tables(tree: dict[str, Any]) -> str:
 
     console.print(per_cat_table)
 
-    return console.export_text(clear=False)
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -219,7 +219,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     type=click.Path(path_type=Path),
     default=Path("evaluation_results"),
     show_default=True,
-    help="Directory for summary and optional exports.",
+    help="Directory for optional structured exports.",
 )
 @click.option(
     "--export",
@@ -282,8 +282,7 @@ def main(
             run_results.append((dataset_path.stem, model.model_name, overall, per_cat))
 
     tree = build_results_tree(run_results)
-    summary_text = render_console_tables(tree)
-    (output_dir / "summary.txt").write_text(summary_text, encoding="utf-8")
+    render_console_tables(tree)
 
     if export_formats:
         export_results(

@@ -22,24 +22,20 @@ All of the above are also computed per contribution_level category:
 
 from __future__ import annotations
 
-import json
 import logging
-import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-from sklearn.metrics import roc_auc_score
 
+from .datasets import load_dataset as load_dataset_batch
+from .datasets.file import normalize_label as normalize_label_value
+from .metrics import run_all_metrics, safe_round
+from .metrics.calibration import expected_calibration_error
 from .models.base import StubModelOutput, StubTextDetector
 
 LOGGER = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Dataset loading
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -52,142 +48,34 @@ class DatasetRecord:
 
 
 def load_dataset(path: Path, text_key: str, label_key: str, category_key: str) -> list[DatasetRecord]:
-    """Load records from a JSONL file; JSON arrays are also accepted."""
-    raw = path.read_text(encoding="utf-8").strip()
-    if not raw:
-        raise ValueError(f"Dataset is empty: {path}")
-
-    records: list[dict[str, Any]]
-    if raw[0] == "[":
-        loaded = json.loads(raw)
-        if not isinstance(loaded, list):
-            raise ValueError(f"Expected JSON array in {path}")
-        records = [r for r in loaded if isinstance(r, dict)]
-    else:
-        records = []
-        for idx, line in enumerate(raw.splitlines(), start=1):
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSON on line {idx} in {path}") from exc
-            if isinstance(row, dict):
-                records.append(row)
-
-    parsed: list[DatasetRecord] = []
-    for row in records:
-        if text_key not in row or label_key not in row:
-            continue
-        parsed.append(
-            DatasetRecord(
-                text=str(row[text_key]),
-                label=normalize_label(row[label_key]),
-                category=str(row.get(category_key, "unknown")),
-            ),
-        )
-
-    if not parsed:
-        raise ValueError(f"No valid samples with required keys in {path}")
-    return parsed
+    """Compatibility wrapper returning record objects from file-based datasets."""
+    batch = load_dataset_batch(
+        dataset_type="file",
+        path=path,
+        text_key=text_key,
+        label_key=label_key,
+        category_key=category_key,
+    )
+    return [
+        DatasetRecord(text=text, label=int(label), category=str(category))
+        for text, label, category in zip(batch.texts, batch.labels, batch.categories)
+    ]
 
 
 def normalize_label(raw_label: Any) -> int:
-    """Map common label representations to 0 (human) or 1 (machine)."""
-    if isinstance(raw_label, bool):
-        return int(raw_label)
-    if isinstance(raw_label, (int, np.integer)):
-        return int(raw_label)
-
-    val = str(raw_label).strip().lower()
-    if val in {"1", "machine", "fake", "ai", "generated"}:
-        return 1
-    if val in {"0", "human", "real", "organic"}:
-        return 0
-    raise ValueError(f"Unsupported label value: {raw_label}")
+    """Compatibility wrapper around the file dataset label normalizer."""
+    return normalize_label_value(raw_label)
 
 
-# ---------------------------------------------------------------------------
-# Metric helpers
-# ---------------------------------------------------------------------------
-
-
-def safe_round(value: float | None, ndigits: int = 4) -> float | None:
-    """Round a numeric value while preserving None / NaN."""
-    if value is None or (isinstance(value, float) and math.isnan(value)):
-        return None
-    return round(float(value), ndigits)
-
-
-def expected_calibration_error(scores: np.ndarray, labels: np.ndarray, bins: int = 10) -> float:
-    """Compute ECE for predicted probabilities in [0, 1].
-
-    Uses equal-width binning over the score range.
-    """
-    scores = np.clip(scores, 0.0, 1.0)
-    edges = np.linspace(0.0, 1.0, bins + 1)
-    ece = 0.0
-
-    for i in range(bins):
-        lo, hi = edges[i], edges[i + 1]
-        mask = (scores >= lo) & (scores <= hi if i == bins - 1 else scores < hi)
-
-        if not np.any(mask):
-            continue
-
-        conf = float(np.mean(scores[mask]))
-        acc = float(np.mean(labels[mask]))
-        frac = float(np.mean(mask))
-        ece += abs(acc - conf) * frac
-
-    return ece
-
-
-def _compute_metrics(
-    labels: np.ndarray,
-    scores: np.ndarray,
-    ood_flags: np.ndarray,
-    flags: np.ndarray,
-    target_alpha: float,
-    tau: float,
-    normalized_scores: bool,
-) -> dict[str, Any]:
-    """Compute the standard metric bundle for a slice of the data."""
-    human_mask = labels == 0
-    machine_mask = labels == 1
-    non_ood = ~ood_flags
-
-    n_human = int(human_mask.sum())
-    n_machine = int(machine_mask.sum())
-
-    fpr = float((flags & human_mask).sum() / max(n_human, 1))
-    tpr = float((flags & machine_mask).sum() / max(n_machine, 1))
-    cal_gap = abs(fpr - target_alpha)
-    ood_pct = float(ood_flags.mean() * 100.0)
-
-    auroc: float | None = None
-    if non_ood.sum() > 0 and len(np.unique(labels[non_ood])) == 2:
-        auroc = float(roc_auc_score(labels[non_ood], scores[non_ood]))
-
-    entry: dict[str, Any] = {
+def _base_counts(labels: np.ndarray, tau: float, target_alpha: float) -> dict[str, Any]:
+    """Compute non-derived counts and threshold metadata for one data slice."""
+    return {
         "n_samples": int(labels.size),
-        "n_human": n_human,
-        "n_machine": n_machine,
+        "n_human": int((labels == 0).sum()),
+        "n_machine": int((labels == 1).sum()),
         "tau": safe_round(tau),
         "target_alpha": target_alpha,
-        "auroc": safe_round(auroc),
-        "fpr_at_tau": safe_round(fpr),
-        "tpr_at_tau": safe_round(tpr),
-        "calibration_gap": safe_round(cal_gap),
-        "ood_percent": safe_round(ood_pct),
     }
-
-    if normalized_scores:
-        entry["brier"] = safe_round(float(np.mean((scores - labels) ** 2)))
-        entry["ece"] = safe_round(expected_calibration_error(scores=scores, labels=labels, bins=10))
-
-    return entry
 
 
 # ---------------------------------------------------------------------------
@@ -232,28 +120,35 @@ def evaluate_predictions(
 
     flags = (scores >= tau) & non_ood
 
-    overall = _compute_metrics(
-        labels=labels,
-        scores=scores,
-        ood_flags=ood_flags,
-        flags=flags,
-        target_alpha=target_alpha,
-        tau=tau,
-        normalized_scores=normalized_scores,
+    overall = _base_counts(labels=labels, tau=tau, target_alpha=target_alpha)
+    overall.update(
+        run_all_metrics(
+            labels=labels,
+            scores=scores,
+            ood_flags=ood_flags,
+            flags=flags,
+            target_alpha=target_alpha,
+            tau=tau,
+            normalized_scores=normalized_scores,
+        ),
     )
 
     per_category: dict[str, dict[str, Any]] = {}
     for category in sorted(set(categories.tolist())):
         mask = categories == category
-        per_category[category] = _compute_metrics(
-            labels=labels[mask],
-            scores=scores[mask],
-            ood_flags=ood_flags[mask],
-            flags=flags[mask],
-            target_alpha=target_alpha,
-            tau=tau,
-            normalized_scores=normalized_scores,
+        cat_entry = _base_counts(labels=labels[mask], tau=tau, target_alpha=target_alpha)
+        cat_entry.update(
+            run_all_metrics(
+                labels=labels[mask],
+                scores=scores[mask],
+                ood_flags=ood_flags[mask],
+                flags=flags[mask],
+                target_alpha=target_alpha,
+                tau=tau,
+                normalized_scores=normalized_scores,
+            ),
         )
+        per_category[category] = cat_entry
 
     return overall, per_category
 
@@ -281,11 +176,17 @@ def evaluate_model_on_dataset(
         contains ``dataset`` or ``model`` keys; those are tracked by the
         caller in the results tree.
     """
-    records = load_dataset(dataset_path, text_key=text_key, label_key=label_key, category_key=category_key)
+    batch = load_dataset_batch(
+        dataset_type="file",
+        path=dataset_path,
+        text_key=text_key,
+        label_key=label_key,
+        category_key=category_key,
+    )
 
-    texts = [r.text for r in records]
-    labels = np.array([r.label for r in records], dtype=int)
-    categories = np.array([r.category for r in records], dtype=object)
+    texts = batch.texts
+    labels = batch.labels
+    categories = batch.categories
 
     model_output = model.predict(texts)
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from click.testing import CliRunner
 
 from text_detection_baselines.cli import main, _flatten_overall, _flatten_per_category
@@ -25,7 +24,7 @@ _SAMPLE_ROWS = [
 ]
 
 
-def test_cli_writes_summary_txt(tmp_path):
+def test_cli_does_not_write_summary_txt(tmp_path):
     dataset_path = tmp_path / "toy.jsonl"
     output_dir = tmp_path / "out"
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
@@ -37,7 +36,7 @@ def test_cli_writes_summary_txt(tmp_path):
         "--output-dir", str(output_dir),
     ])
     assert result.exit_code == 0, result.output
-    assert (output_dir / "summary.txt").exists()
+    assert not (output_dir / "summary.txt").exists()
 
 
 def test_cli_csv_export(tmp_path):
