@@ -232,6 +232,17 @@ def test_cli_no_default_datasets_requires_some_selection():
     assert "No datasets selected" in result.output
 
 
+def test_cli_help_lists_registered_datasets_and_models():
+    runner = CliRunner()
+    result = runner.invoke(main, ["--help"])
+
+    assert result.exit_code == 0
+    assert "Available: gede" in result.output
+    assert "Available: torch-normalized, torch-raw, length-normalized, smollm2-prompting" in result.output
+    assert "Defaults: gede" in result.output
+    assert "Defaults: torch-normalized, torch-raw, length-normalized" in result.output
+
+
 def test_flatten_helpers():
     tree = {
         "overall": {"ds1": {"model-a": {"auroc": 0.8}}},

@@ -34,6 +34,11 @@ from .models import build_model, get_default_model_names, list_registered_models
 
 LOGGER = logging.getLogger(__name__)
 
+_REGISTERED_DATASETS = ", ".join(list_registered_datasets())
+_DEFAULT_DATASETS = ", ".join(get_default_dataset_names())
+_REGISTERED_MODELS = ", ".join(list_registered_models())
+_DEFAULT_MODELS = ", ".join(get_default_model_names())
+
 
 def _unique_preserve_order(names: list[str]) -> tuple[str, ...]:
     """Return de-duplicated names while preserving first-seen order."""
@@ -235,14 +240,20 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     "datasets",
     type=str,
     multiple=True,
-    help="Registered dataset name to evaluate. Repeat to evaluate multiple datasets.",
+    help=(
+        "Registered dataset name to evaluate. Repeat to evaluate multiple datasets. "
+        f"Available: {_REGISTERED_DATASETS}. Defaults: {_DEFAULT_DATASETS}."
+    ),
 )
 @click.option(
     "--model",
     "models",
     type=str,
     multiple=True,
-    help="Registered model name to evaluate. Repeat to evaluate multiple models.",
+    help=(
+        "Registered model name to evaluate. Repeat to evaluate multiple models. "
+        f"Available: {_REGISTERED_MODELS}. Defaults: {_DEFAULT_MODELS}."
+    ),
 )
 @click.option(
     "--register-file-dataset",
