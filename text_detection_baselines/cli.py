@@ -59,18 +59,19 @@ def _resolve_selection(
     default_names: tuple[str, ...],
     all_names: tuple[str, ...],
     runtime_names: tuple[str, ...],
-    include_defaults: bool,
     include_all: bool,
+    excluded_names: tuple[str, ...],
 ) -> tuple[str, ...]:
     """Resolve the final ordered selection for a registry-backed CLI option."""
     selected: list[str] = []
     if include_all:
         selected.extend(all_names)
-    elif include_defaults:
+    else:
         selected.extend(default_names)
     selected.extend(runtime_names)
     selected.extend(explicit_names)
-    return _unique_preserve_order(selected)
+    excluded = {name.lower() for name in excluded_names}
+    return tuple(name for name in _unique_preserve_order(selected) if name.lower() not in excluded)
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +243,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 @click.option(
     "--dataset",
     "datasets",
+    "-d",
     type=str,
     multiple=True,
     help=(
@@ -252,6 +254,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 @click.option(
     "--model",
     "models",
+    "-m",
     type=str,
     multiple=True,
     help=(
@@ -264,17 +267,23 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     "runtime_file_datasets",
     type=str,
     multiple=True,
-    help="Register file dataset at runtime as NAME=PATH. Repeatable.",
+    help="Register file dataset at runtime as NAME=PATH and include it in evaluation. Repeatable.",
 )
 @click.option(
-    "--no-default-datasets",
-    is_flag=True,
-    help="Do not include default pre-registered datasets in the run.",
+    "--exclude-dataset",
+    "exclude_datasets",
+    "-xd",
+    type=str,
+    multiple=True,
+    help="Exclude dataset(s) by registered name. Repeatable.",
 )
 @click.option(
-    "--no-default-models",
-    is_flag=True,
-    help="Do not include default pre-registered models in the run.",
+    "--exclude-model",
+    "exclude_models",
+    "-xm",
+    type=str,
+    multiple=True,
+    help="Exclude model(s) by registered name. Repeatable.",
 )
 @click.option(
     "--all-datasets",
@@ -296,6 +305,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 @click.option("--target-alpha", type=float, default=0.05, show_default=True, help="Target FPR for learning tau.")
 @click.option(
     "--output-dir",
+    "-o",
     type=click.Path(path_type=Path),
     default=Path("evaluation_results"),
     show_default=True,
@@ -304,6 +314,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 @click.option(
     "--export",
     "export_formats",
+    "-e",
     type=click.Choice(["csv", "json", "yaml"], case_sensitive=False),
     multiple=True,
     help="Write structured output files in selected format(s).",
@@ -329,8 +340,8 @@ def main(
     datasets: tuple[str, ...],
     models: tuple[str, ...],
     runtime_file_datasets: tuple[str, ...],
-    no_default_datasets: bool,
-    no_default_models: bool,
+    exclude_datasets: tuple[str, ...],
+    exclude_models: tuple[str, ...],
     all_datasets: bool,
     all_models: bool,
     select_all_flag: bool,
@@ -367,42 +378,69 @@ def main(
         register_file_dataset(name=name, path=dataset_path)
         runtime_dataset_names.append(name)
 
+    registered_datasets = tuple(list_registered_datasets())
+    registered_models = tuple(list_registered_models())
+    dataset_lookup = {name.lower() for name in registered_datasets}
+    model_lookup = {name.lower() for name in registered_models}
+
+    unknown_requested_datasets = [name for name in datasets if name.lower() not in dataset_lookup]
+    if unknown_requested_datasets:
+        valid = ", ".join(registered_datasets)
+        raise click.BadParameter(
+            f"Unknown dataset(s): {', '.join(unknown_requested_datasets)}. Valid options: {valid}",
+            param_hint="--dataset",
+        )
+
+    unknown_requested_models = [name for name in models if name.lower() not in model_lookup]
+    if unknown_requested_models:
+        valid = ", ".join(registered_models)
+        raise click.BadParameter(
+            f"Unknown model(s): {', '.join(unknown_requested_models)}. Valid options: {valid}",
+            param_hint="--model",
+        )
+
+    unknown_excluded_datasets = [name for name in exclude_datasets if name.lower() not in dataset_lookup]
+    if unknown_excluded_datasets:
+        valid = ", ".join(registered_datasets)
+        raise click.BadParameter(
+            f"Unknown dataset(s): {', '.join(unknown_excluded_datasets)}. Valid options: {valid}",
+            param_hint="--exclude-dataset",
+        )
+
+    unknown_excluded_models = [name for name in exclude_models if name.lower() not in model_lookup]
+    if unknown_excluded_models:
+        valid = ", ".join(registered_models)
+        raise click.BadParameter(
+            f"Unknown model(s): {', '.join(unknown_excluded_models)}. Valid options: {valid}",
+            param_hint="--exclude-model",
+        )
+
     selected_datasets = _resolve_selection(
         explicit_names=datasets,
         default_names=get_default_dataset_names(),
-        all_names=tuple(list_registered_datasets()),
+        all_names=registered_datasets,
         runtime_names=tuple(runtime_dataset_names),
-        include_defaults=not no_default_datasets,
         include_all=all_datasets,
+        excluded_names=exclude_datasets,
     )
     selected_models = _resolve_selection(
         explicit_names=models,
         default_names=get_default_model_names(),
-        all_names=tuple(list_registered_models()),
+        all_names=registered_models,
         runtime_names=(),
-        include_defaults=not no_default_models,
         include_all=all_models,
+        excluded_names=exclude_models,
     )
 
     if not selected_datasets:
         raise click.BadParameter(
-            "No datasets selected. Use --dataset and/or --register-file-dataset, or omit --no-default-datasets.",
+            "No datasets selected. Use --dataset and/or --register-file-dataset, or avoid excluding every dataset.",
         )
 
     if not selected_models:
         raise click.BadParameter(
-            "No models selected. Use --model, or omit --no-default-models.",
+            "No models selected. Use --model, or avoid excluding every model.",
         )
-
-    unknown_datasets = [name for name in selected_datasets if name.lower() not in set(list_registered_datasets())]
-    if unknown_datasets:
-        valid = ", ".join(list_registered_datasets())
-        raise click.BadParameter(f"Unknown dataset(s): {', '.join(unknown_datasets)}. Valid options: {valid}")
-
-    unknown_models = [name for name in selected_models if name.lower() not in set(list_registered_models())]
-    if unknown_models:
-        valid = ", ".join(list_registered_models())
-        raise click.BadParameter(f"Unknown model(s): {', '.join(unknown_models)}. Valid options: {valid}")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
