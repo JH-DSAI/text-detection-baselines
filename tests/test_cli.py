@@ -33,29 +33,6 @@ _SAMPLE_ROWS = [
 ]
 
 
-def test_cli_does_not_write_summary_txt(tmp_path):
-    dataset_path = tmp_path / "toy.jsonl"
-    output_dir = tmp_path / "out"
-    _write_jsonl(dataset_path, _SAMPLE_ROWS)
-
-    runner = CliRunner()
-    result = runner.invoke(
-        main,
-        [
-            "--register-file-dataset",
-            f"toy={dataset_path}",
-            "--dataset",
-            "toy",
-            "--model",
-            "length-normalized",
-            "--output-dir",
-            str(output_dir),
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert not (output_dir / "summary.txt").exists()
-
-
 def test_cli_csv_export(tmp_path):
     dataset_path = tmp_path / "toy.jsonl"
     output_dir = tmp_path / "out"

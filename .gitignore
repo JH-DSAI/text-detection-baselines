@@ -1,5 +1,4 @@
 # Output files
-summary.txt
 metrics.json
 metrics.yaml
 overall-metrics.csv
