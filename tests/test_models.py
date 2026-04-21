@@ -15,6 +15,7 @@ from text_detection_baselines.models import (
 )
 from text_detection_baselines.models.base import StubModelOutput, StubTextDetector
 from text_detection_baselines.models.length_heuristic import LengthHeuristicStubDetector
+from text_detection_baselines.models.prompting_smol import SmolLMPromptingDetector
 from text_detection_baselines.models.torch_linear import TorchLinearStubDetector
 
 _TEXTS = [
@@ -92,8 +93,8 @@ def test_feature_matrix_shape():
 
 def test_model_registry_defaults_present():
     names = list_registered_models()
-    assert names == ["torch-normalized", "torch-raw", "length-normalized"]
-    assert get_default_model_names() == tuple(names)
+    assert names == ["torch-normalized", "torch-raw", "length-normalized", "smollm2-prompting"]
+    assert get_default_model_names() == ("torch-normalized", "torch-raw", "length-normalized")
 
 
 def test_build_model_from_registry():
@@ -113,3 +114,26 @@ def test_register_model_runtime():
         assert model.model_name == "custom-length"
     finally:
         MODEL_REGISTRY.pop("custom-length", None)
+
+
+def test_build_prompting_model_from_registry():
+    model = build_model("smollm2-prompting", ood_margin=0.05, seed=1)
+    assert isinstance(model, SmolLMPromptingDetector)
+    assert model.normalized_scores is True
+
+
+def test_prompting_model_predict_shape_with_monkeypatch(monkeypatch):
+    model = SmolLMPromptingDetector("smollm2-prompting", normalized_scores=True, ood_margin=0.1, seed=1)
+
+    def fake_score_single(self, text: str) -> float:
+        return 0.8 if "machine" in text else 0.2
+
+    monkeypatch.setattr(SmolLMPromptingDetector, "_score_single", fake_score_single)
+    output = model.predict(_TEXTS)
+
+    assert isinstance(output, StubModelOutput)
+    assert output.scores.shape == (3,)
+    assert output.predictions.shape == (3,)
+    assert output.ood_flags.shape == (3,)
+    assert np.all(output.scores >= 0.0)
+    assert np.all(output.scores <= 1.0)

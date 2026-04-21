@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from .base import StubModelOutput, StubTextDetector
 from .length_heuristic import LengthHeuristicStubDetector
+from .prompting_smol import SmolLMPromptingDetector
 from .torch_linear import TorchLinearStubDetector
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "TorchLinearStubDetector",
     "MODEL_REGISTRY",
     "ModelSpec",
+    "SmolLMPromptingDetector",
     "build_model",
     "build_stub_model",
     "get_default_model_names",
@@ -33,6 +35,7 @@ class ModelSpec:
 
     name: str
     factory: ModelFactory
+    is_default: bool
 
 
 MODEL_REGISTRY: dict[str, ModelSpec] = {}
@@ -42,10 +45,10 @@ def _canon(name: str) -> str:
     return name.strip().lower()
 
 
-def register_model(name: str, factory: ModelFactory) -> None:
+def register_model(name: str, factory: ModelFactory, *, is_default: bool = True) -> None:
     """Register or replace a model factory."""
     key = _canon(name)
-    MODEL_REGISTRY[key] = ModelSpec(name=key, factory=factory)
+    MODEL_REGISTRY[key] = ModelSpec(name=key, factory=factory, is_default=is_default)
 
 
 def list_registered_models() -> list[str]:
@@ -55,7 +58,7 @@ def list_registered_models() -> list[str]:
 
 def get_default_model_names() -> tuple[str, ...]:
     """Return default model names for CLI evaluation."""
-    return tuple(MODEL_REGISTRY.keys())
+    return tuple(spec.name for spec in MODEL_REGISTRY.values() if spec.is_default)
 
 
 def build_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:
@@ -86,9 +89,19 @@ def _length_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector
     )
 
 
+def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector:
+    return SmolLMPromptingDetector(
+        model_name="smollm2-prompting",
+        normalized_scores=True,
+        ood_margin=ood_margin,
+        seed=seed,
+    )
+
+
 register_model("torch-normalized", _torch_normalized_factory)
 register_model("torch-raw", _torch_raw_factory)
 register_model("length-normalized", _length_normalized_factory)
+register_model("smollm2-prompting", _smollm2_prompting_factory)
 
 
 def build_stub_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:
