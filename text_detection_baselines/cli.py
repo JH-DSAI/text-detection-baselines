@@ -302,7 +302,6 @@ def main(
         raise click.BadParameter(f"Unknown model(s): {', '.join(unknown_models)}. Valid options: {valid}")
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     model_objs = [build_model(name, ood_margin=ood_margin, seed=seed) for name in selected_models]
 
@@ -326,6 +325,7 @@ def main(
     render_console_tables(tree)
 
     if export_formats:
+        output_dir.mkdir(parents=True, exist_ok=True)
         export_results(
             output_dir=output_dir,
             export_formats=tuple(fmt.lower() for fmt in export_formats),
