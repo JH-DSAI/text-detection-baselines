@@ -13,9 +13,9 @@ from text_detection_baselines.cli import (
     _raise_for_unknown_names,
     _resolve_selection,
     _unique_preserve_order,
+    _write_csv,
     export_results,
     render_console_tables,
-    _write_csv,
 )
 
 
