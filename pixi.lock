@@ -5766,8 +5766,8 @@ packages:
   requires_python: '>=3.10'
 - pypi: ./
   name: text-detection-baselines
-  version: 0.1.dev24+g7d7f348e6.d20260421
-  sha256: bd889d9a5154af2d87a93bd3d092493eeb02cb868f878b7fda378b4fa6d16528
+  version: 0.1.dev23+g8816551ad.d20260810
+  sha256: 732c3a4f1191c8799d906adc2d6562b2d33cef50a857086e1e0c764b9d5696d5
   requires_dist:
   - fastapi[all]
   - bandit>=1.7 ; extra == 'dev'
