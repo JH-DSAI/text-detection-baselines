@@ -162,7 +162,7 @@ test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
 check-style = "ruff format . --check && ruff check ."
 check-security = "bandit -c pyproject.toml --severity-level=medium -r text_detection_baselines"
 format = "ruff format . && ruff check --select I --fix ."
-test = "pytest --cov=./ --cov-report=html:coverage.html --cov-report=xml:coverage.xml"
+test = "pytest --cov=text_detection_baselines --cov-branch --cov-report term --cov-report=xml --cov-report=json --cov-report=term-missing"
 build-docs = "cd docs && make clean html latex epub"
 build-dist = "python -m build"
 start = "uvicorn text_detection_baselines.app.main:app --host 0.0.0.0 --port 8000"
