@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/ci.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/text-detection-baselines/badge/?version=latest)](https://text-detection-baselines.readthedocs.io/en/latest/?badge=latest)
-[![codecov](https://codecov.io/gh/JH-DSAI/text-detection-baselines/graph/badge.svg?token=meQRW4r7mP)](https://codecov.io/gh/JH-DSAI/text-detection-baselines)
 [![Security](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml)
 <!-- [![DOI](https://zenodo.org/badge/DOI/REPLACE/ME.svg)](https://doi.org/REPLACE/ME) -->
 
