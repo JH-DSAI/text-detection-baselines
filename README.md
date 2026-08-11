@@ -177,6 +177,13 @@ deliberately diverges from the researchers' implementation:
   CSV/JSON/YAML exports hold the unrounded metric, so they remain usable for
   paired significance testing between two close models.
 
+* **Non-finite metric values are exported as `null`.** `normalize_metric_value`
+  maps NaN and ±inf to `None` on the way out of `run_all_metrics`, because none of
+  the three has a JSON representation. A metric that goes non-finite is therefore
+  indistinguishable in the exports from one that returned `null` deliberately; no
+  metric currently does, but a new one should return `null` explicitly rather than
+  rely on this.
+
 * **Per-category ranking metrics are `null` on `gede`.** Every
   `contribution_level` category in that dataset contains exactly one label, so all
   three ranking metrics are undefined for every category row.

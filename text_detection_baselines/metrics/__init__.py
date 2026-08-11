@@ -50,20 +50,23 @@ def register_metric(
 
 
 def normalize_metric_value(value: float | None) -> float | None:
-    """Coerce a metric result to a plain float, mapping ``None`` and NaN to ``None``.
+    """Coerce a metric result to a plain float, mapping ``None`` and non-finites to ``None``.
 
-    A NaN would serialize as the bare literal ``NaN`` in JSON — which strict
-    parsers reject — and as ``.nan`` in YAML, so it is normalized to ``None``
-    here rather than at each metric's return site.
+    NaN and ±inf have no JSON representation: :func:`json.dumps` writes the bare
+    literals ``NaN``, ``Infinity``, and ``-Infinity``, which strict parsers reject,
+    and YAML writes ``.nan`` / ``.inf``.  All three are normalized to ``None`` here
+    rather than at each metric's return site, so an undefined value reads the same
+    way in every export as one the metric declined to compute.
 
     Raises:
         TypeError: If ``value`` is not float-coercible.  Curve-valued metrics
             cannot enter the registry until :data:`MetricFunc` widens to admit
             them.
     """
-    if value is None or (isinstance(value, float) and math.isnan(value)):
+    if value is None:
         return None
-    return float(value)
+    coerced = float(value)
+    return coerced if math.isfinite(coerced) else None
 
 
 def run_all_metrics(

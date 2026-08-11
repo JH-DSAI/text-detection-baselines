@@ -187,9 +187,10 @@ minimum size.
 JSON/YAML/CSV exports were lossy. Fine for reading a table, lossy for paired
 significance testing between two close models.
 
-**Resolved:** `safe_round` is now `normalize_metric_value`, which keeps the NaN and
-`None` handling — a NaN would otherwise serialize as the invalid JSON literal `NaN`
-— and drops the rounding. Rounding happens only in `_fmt`
+**Resolved:** `safe_round` is now `normalize_metric_value`, which drops the rounding
+and keeps a widened `None` guard: NaN and ±inf all map to `None`, since
+`json.dumps` would otherwise write the invalid literals `NaN` / `Infinity`.
+Rounding happens only in `_fmt`
 ([cli.py](text_detection_baselines/cli.py)) at render time. `_base_counts`
 ([evaluate.py](text_detection_baselines/evaluate.py)) also no longer rounds `tau`:
 the rounded copy did not reproduce the reported `fpr_at_tau` / `tpr_at_tau`, since

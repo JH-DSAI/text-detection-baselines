@@ -210,8 +210,14 @@ def test_normalize_metric_value_none():
     assert normalize_metric_value(None) is None
 
 
-def test_normalize_metric_value_nan():
-    assert normalize_metric_value(float("nan")) is None
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_normalize_metric_value_non_finite(value):
+    assert normalize_metric_value(value) is None
+
+
+def test_normalize_metric_value_normalizes_numpy_scalars():
+    assert normalize_metric_value(np.float32("nan")) is None
+    assert normalize_metric_value(np.float32(0.5)) == 0.5
 
 
 def test_normalize_metric_value_preserves_full_precision():
