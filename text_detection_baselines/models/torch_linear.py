@@ -41,10 +41,11 @@ class TorchLinearStubDetector(StubTextDetector):
         self._np_bias = float(bias)
 
         if torch is not None and nn is not None:
-            torch.manual_seed(seed)
             self._layer: nn.Module | None = nn.Linear(4, 1, bias=True)
             with torch.no_grad():
-                self._layer.weight[:] = torch.tensor(weights.reshape(1, -1))
+                # reshape to the parameter's own shape so a size mismatch raises
+                # instead of broadcasting silently.
+                self._layer.weight[:] = torch.tensor(weights).reshape(self._layer.weight.shape)
                 self._layer.bias[:] = torch.tensor([bias])
         else:
             self._layer = None
@@ -53,17 +54,20 @@ class TorchLinearStubDetector(StubTextDetector):
         feats = self._feature_matrix(texts)
         raw = self._forward(feats)
 
+        # ``confidence`` is distance from the decision boundary, so it is *low*
+        # for middling scores and high for extreme ones.
         if self.normalized_scores:
             scores = 1.0 / (1.0 + np.exp(-raw))
             preds = (scores >= 0.5).astype(int)
-            uncertainty = np.abs(scores - 0.5)
+            confidence = np.abs(scores - 0.5)
         else:
             scores = raw
             preds = (scores >= 0.0).astype(int)
             scale = max(np.std(scores), 1e-6)
-            uncertainty = np.abs(scores) / scale
+            confidence = np.abs(scores) / scale
 
-        ood = (uncertainty < self.ood_margin) | (feats[:, 0] < 40)
+        # Flagged when the model is unconfident, or the text is too short to judge.
+        ood = (confidence < self.ood_margin) | (feats[:, 0] < 40)
         return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood)
 
     def _forward(self, feats: np.ndarray) -> np.ndarray:

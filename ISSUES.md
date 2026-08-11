@@ -18,9 +18,10 @@ currently computes.
 requires a per-sample uncertainty array. `StubModelOutput`
 ([models/base.py](text_detection_baselines/models/base.py)) carries only `scores`,
 `predictions`, and `ood_flags`. All three stub detectors compute a continuous
-uncertainty and then throw it away by binarizing it into `ood_flags`:
-[torch_linear.py:56-63](text_detection_baselines/models/torch_linear.py#L56-L63)
-binds it to an `uncertainty` variable and never returns it, while
+*confidence* — distance from the decision boundary — and then throw it away by
+binarizing it into `ood_flags`:
+[torch_linear.py:56-66](text_detection_baselines/models/torch_linear.py#L56-L66)
+binds it to a `confidence` variable and never returns it, while
 [length_heuristic.py:30](text_detection_baselines/models/length_heuristic.py#L30) and
 [prompting_smol.py:116](text_detection_baselines/models/prompting_smol.py#L116)
 compute `np.abs(scores - 0.5)` inline inside the `ood` expression.
@@ -31,6 +32,14 @@ The function is therefore tested but never called by the pipeline.
 detectors populate it from the quantity they already compute, and call the curve
 from `evaluate_predictions`. Requires resolving issue 3 first, since the curve
 cannot travel through the current metric registry.
+
+**Careful:** the quantity the detectors compute is a confidence, and must be
+*inverted* before it can serve as the `variances` argument. The curve abstains on
+samples whose variance **exceeds** the threshold, so passing confidences through
+unchanged would abstain on the most confident samples and invert the whole curve.
+`1 - 2 * confidence` maps the normalized branch back onto `[0, 1]`; the
+unnormalized branch is already scaled by the score standard deviation and needs a
+choice of its own.
 
 ### 2. The curve ignores `ood_flags`
 
