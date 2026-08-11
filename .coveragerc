@@ -2,6 +2,3 @@
 omit =
     */_version.py
     */tests/*
-[report]
-exclude_lines =
-    @abstractmethod

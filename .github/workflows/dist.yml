@@ -12,6 +12,7 @@ jobs:
     - name: Set up pixi
       uses: prefix-dev/setup-pixi@v0.8.14
       with:
+        pixi-version: v0.75.0
         environments: dist
         cache: true
     - name: Build a binary wheel and a source tarball

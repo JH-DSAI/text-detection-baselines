@@ -16,7 +16,7 @@ To do:
 
 ## Quickstart (pixi)
 
-1. Install pixi from <https://pixi.sh/latest/>.
+1. Install pixi 0.75 or later from <https://pixi.sh/latest/>.
 1. Clone this repository.
 1. Run evaluation on default datasets and models (automatically installs dependencies in a virtual environment):
 

@@ -5,14 +5,9 @@ from __future__ import annotations
 from typing import Any, cast
 
 import numpy as np
+import torch
 
 from .base import StubModelOutput, StubTextDetector
-
-torch: Any
-try:
-    import torch
-except ImportError:  # pragma: no cover
-    torch = None
 
 
 class SmolLMPromptingDetector(StubTextDetector):
@@ -42,17 +37,10 @@ class SmolLMPromptingDetector(StubTextDetector):
     def _ensure_backend(self) -> None:
         if self._tokenizer is not None and self._model is not None:
             return
-        if torch is None:
-            raise RuntimeError(
-                "PyTorch is required for SmolLM prompting detector but is not available.",
-            )
 
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError(
-                "transformers is required for SmolLM prompting detector. Install it with: pip install transformers",
-            ) from exc
+        # Imported here rather than at module scope: ``models/__init__`` imports this module
+        # eagerly, and transformers costs seconds to import even for runs using other models.
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         try:
             self._tokenizer = AutoTokenizer.from_pretrained(self.hf_model_id, revision=self.hf_revision)

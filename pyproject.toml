@@ -11,7 +11,7 @@ license = "BSD-3-Clause"
 license-files = ["LICEN[CS]E*", ".zenodo.json"]
 
 requires-python = ">=3.11"
-dependencies = ["click>=8.3.2,<9", "pyyaml>=6.0.3,<7", "rich>=15.0.0,<16"]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
@@ -104,7 +104,15 @@ files = ["text_detection_baselines/**/*.py"]
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
+platforms = [
+    "linux-64",
+    {platform = "linux-64", cuda = "12"},
+    "linux-aarch64",
+    {platform = "linux-aarch64", cuda = "12"},
+    "osx-arm64",
+    "win-64",
+    {platform = "win-64", cuda = "12"}
+]
 
 [tool.pixi.dependencies]
 python = ">=3.11,<3.15"
@@ -112,6 +120,9 @@ pytorch = "~=2.0"
 numpy = "~=2.4"
 scikit-learn = "~=1.8"
 transformers = "~=4.44"
+click = ">=8.3.2,<9"
+pyyaml = ">=6.0.3,<7"
+rich = ">=15.0.0,<16"
 
 [tool.pixi.pypi-dependencies]
 text-detection-baselines = { path = ".", editable = true }
@@ -147,31 +158,43 @@ python = "3.14.*"
 [tool.pixi.feature.cuda]
 channels = ["nvidia"]
 dependencies = {cuda = "12.*", pytorch-gpu = "2.*"}
-platforms = ["linux-64", "linux-aarch64", "win-64"]
-system-requirements = {cuda = "12"}
+platforms = [
+    "linux-64-cuda-12",
+    "linux-aarch64-cuda-12",
+    "win-64-cuda-12"
+]
 
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
-docs = { features = ["dev", "docs"], solve-group = "default" }
-dist = { features = ["dev"], solve-group = "default" }
 test-py311 = { features = ["dev", "py311"], solve-group = "test-py311" }
 test-py312 = { features = ["dev", "py312"], solve-group = "test-py312" }
 test-py313 = { features = ["dev", "py313"], solve-group = "test-py313" }
 test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
 cuda = { features = ["cuda"] }
 
+[tool.pixi.environments.dist]
+features = ["dev"]
+solve-group = "default"
+tasks = { build-dist = "python -m build" }
+
+[tool.pixi.environments.docs]
+features = ["dev", "docs"]
+solve-group = "default"
+tasks = { build-docs = "cd docs && make clean html latex epub" }
+
 [tool.pixi.tasks]
+main = "python -m text_detection_baselines.cli"
+prepare-gede = "python -m text_detection_baselines.prepare_gede"
+make-demo-dataset = "python tools/make_demo_dataset.py"
+
+[tool.pixi.feature.dev.tasks]
 check-style = "ruff format --check . && ruff check ."
 check-security = "bandit -c pyproject.toml --severity-level=medium -r text_detection_baselines"
 check-types = "mypy"
 format = "ruff format . && ruff check --select I --fix ."
 fix = "ruff check --fix ."
 test = "pytest --cov=text_detection_baselines --cov-branch --cov-report term --cov-report=xml --cov-report=json --cov-report=term-missing"
-build-docs = "cd docs && make clean html latex epub"
-build-dist = "python -m build"
-main = "python -m text_detection_baselines.cli"
-prepare-gede = "python -m text_detection_baselines.prepare_gede"
-make-demo-dataset = "python tools/make_demo_dataset.py"
 lint = { depends-on = ["check-style", "check-security", "check-types"] }
 ci = { depends-on = ["lint", "test"] }
+
