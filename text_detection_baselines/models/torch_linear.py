@@ -2,20 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
+import torch
+from torch import nn
 
 from .base import StubModelOutput, StubTextDetector
-
-torch: Any
-nn: Any
-try:
-    import torch
-    from torch import nn
-except ImportError:  # pragma: no cover
-    torch = None
-    nn = None
 
 
 class TorchLinearStubDetector(StubTextDetector):
@@ -37,18 +28,12 @@ class TorchLinearStubDetector(StubTextDetector):
         weights = np.array([0.015, 0.09, -0.03, 1.3], dtype=np.float32)
         bias = np.float32(-2.1)
 
-        self._np_weights = weights.astype(float)
-        self._np_bias = float(bias)
-
-        if torch is not None and nn is not None:
-            self._layer: nn.Module | None = nn.Linear(4, 1, bias=True)
-            with torch.no_grad():
-                # reshape to the parameter's own shape so a size mismatch raises
-                # instead of broadcasting silently.
-                self._layer.weight[:] = torch.tensor(weights).reshape(self._layer.weight.shape)
-                self._layer.bias[:] = torch.tensor([bias])
-        else:
-            self._layer = None
+        self._layer = nn.Linear(4, 1, bias=True)
+        with torch.no_grad():
+            # reshape to the parameter's own shape so a size mismatch raises
+            # instead of broadcasting silently.
+            self._layer.weight[:] = torch.tensor(weights).reshape(self._layer.weight.shape)
+            self._layer.bias[:] = torch.tensor([bias])
 
     def predict(self, texts: list[str]) -> StubModelOutput:
         feats = self._feature_matrix(texts)
@@ -71,9 +56,6 @@ class TorchLinearStubDetector(StubTextDetector):
         return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood)
 
     def _forward(self, feats: np.ndarray) -> np.ndarray:
-        if self._layer is None:
-            return feats @ self._np_weights + self._np_bias
-
         x = torch.tensor(feats, dtype=torch.float32)
         with torch.no_grad():
             return self._layer(x).squeeze(1).cpu().numpy()
