@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -20,9 +21,23 @@ from text_detection_baselines.datasets import (
 )
 from text_detection_baselines.datasets.file import FileDatasetBatch, load_file_dataset
 
-# Anchored on this file rather than the working directory, so the suite passes
-# regardless of where pytest is invoked from.
-DATA_DIR = Path(__file__).resolve().parent / "data"
+_ROWS = [
+    {"answer": "A short human answer.", "label": "real", "contribution_level": "Human"},
+    {"answer": "Another human answer, longer than the first.", "label": "real", "contribution_level": "Human"},
+    {"answer": "In conclusion, a balanced approach is essential.", "label": "fake", "contribution_level": "Task"},
+    {"answer": "Furthermore it is important to consider stakeholders.", "label": "fake", "contribution_level": "Task"},
+    {"answer": "A human answer in a mixed slice.", "label": "real", "contribution_level": "Mixed"},
+    {"answer": "Moreover the evidence demonstrates a clear trend.", "label": "fake", "contribution_level": "Mixed"},
+]
+
+
+def _write_records(path: Path, *, as_array: bool) -> Path:
+    """Write :data:`_ROWS` as a JSON array or as JSON lines."""
+    if as_array:
+        path.write_text(json.dumps(_ROWS), encoding="utf-8")
+    else:
+        path.write_text("".join(json.dumps(row) + "\n" for row in _ROWS), encoding="utf-8")
+    return path
 
 
 @pytest.fixture
@@ -36,26 +51,24 @@ def clean_registry():
         DATASET_REGISTRY.update(snapshot)
 
 
-def test_load_file_dataset_single_doc_fixture():
-    path = DATA_DIR / "test_single_doc_per_author.json"
+# Both encodings are named explicitly: _read_json_records branches on the first
+# character, not the file extension, and the JSON-array branch has no other caller
+# in the suite now that the array fixtures are gone.
+@pytest.mark.parametrize("as_array", [True, False], ids=["json-array", "json-lines"])
+def test_load_file_dataset_reads_both_encodings(tmp_path, as_array):
+    path = _write_records(tmp_path / "data.json", as_array=as_array)
     batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
     assert isinstance(batch, FileDatasetBatch)
-    assert len(batch) > 0
+    assert len(batch) == len(_ROWS)
+    assert len(batch.texts) == len(batch.labels) == len(batch.categories)
     assert isinstance(batch.texts[0], str)
     assert batch.labels.dtype == np.int64 or batch.labels.dtype == np.int32
     assert set(np.unique(batch.labels).tolist()) == {0, 1}
     assert "Human" in set(batch.categories.tolist())
 
 
-def test_load_file_dataset_multi_doc_fixture():
-    path = DATA_DIR / "test_multi_docs_per_author.json"
-    batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
-    assert len(batch) > 0
-    assert len(batch.texts) == len(batch.labels) == len(batch.categories)
-
-
-def test_dataset_dispatch_file_type():
-    path = DATA_DIR / "test_single_doc_per_author.json"
+def test_dataset_dispatch_file_type(tmp_path):
+    path = _write_records(tmp_path / "data.jsonl", as_array=False)
     batch = load_dataset(
         dataset_type="file",
         path=path,
@@ -66,8 +79,8 @@ def test_dataset_dispatch_file_type():
     assert isinstance(batch, FileDatasetBatch)
 
 
-def test_dataset_dispatch_unknown_type_raises():
-    path = DATA_DIR / "test_single_doc_per_author.json"
+def test_dataset_dispatch_unknown_type_raises(tmp_path):
+    path = _write_records(tmp_path / "data.jsonl", as_array=False)
     with pytest.raises(ValueError, match="Unknown dataset type"):
         load_dataset(
             dataset_type="not-a-type",

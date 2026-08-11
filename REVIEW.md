@@ -62,10 +62,10 @@ clone-and-pixi path.
 
 **Status: mostly resolved.** The corpus is no longer redistributed. `datasets/gede_essays.json`
 has been deleted, the two `tests/data/` fixtures (which contained the same third-party essay
-text) have been regenerated as synthetic, `datasets/README.md` records provenance, the licence
-chain, and composition, and users now obtain and convert the corpus themselves via
-`pixi run prepare-gede`. This also resolved R12 for the new bundled `demo` dataset. Two items
-remain, recorded under "Remaining" below.
+text) have been deleted along with the whole `tests/data/` directory — the tests that used them
+now build their input inline under `tmp_path` — `datasets/README.md` records provenance, the
+licence chain, and composition, and users now obtain and convert the corpus themselves via
+`pixi run prepare-gede`. Two items remain, recorded under "Remaining" below.
 
 The upstream licence question is now answered rather than open: **the GEDE data is CC BY-NC-SA
 4.0**, stated in the upstream README, and the upstream repository carries no `LICENSE` file of
@@ -348,12 +348,6 @@ non-default field names would have caught it.
 tiny fixture with `--export json`, asserting exit code 0 and the presence of expected keys in
 `metrics.json`, covers the whole path without asserting on console formatting — which is the
 distinction `AGENTS.md` is drawing.
-
-### R18. Tests resolve fixtures relative to the working directory — Low
-
-[tests/test_datasets.py:21](tests/test_datasets.py#L21) and its neighbours use
-`Path("tests/data/…")`, so the suite passes only when invoked from the repository root. Anchor
-on `Path(__file__).parent / "data"`, ideally via a fixture.
 
 ### R19. `test_determinism_same_seed` asserts nothing — Low
 

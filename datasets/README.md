@@ -46,8 +46,8 @@ Regenerate with:
 pixi run make-demo-dataset
 ```
 
-The generator is seeded, so this is reproducible and also rewrites the two fixtures
-under `tests/data/`.
+The generator is seeded, so this is reproducible: regenerating without changing the
+generator leaves the file byte-identical.
 
 ---
 

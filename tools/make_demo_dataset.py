@@ -1,4 +1,4 @@
-"""Generate the fully synthetic ``demo`` dataset and the test fixtures.
+"""Generate the fully synthetic ``demo`` dataset.
 
 Every word of text this script emits is composed from the hand-written template
 pools below, so the output carries no third-party content and is redistributable
@@ -21,11 +21,7 @@ Run from the repository root::
 
     python tools/make_demo_dataset.py
 
-Outputs (all overwritten in place):
-
-* ``text_detection_baselines/datasets/data/demo.jsonl``
-* ``tests/data/test_single_doc_per_author.json``
-* ``tests/data/test_multi_docs_per_author.json``
+Output (overwritten in place): ``text_detection_baselines/datasets/data/demo.jsonl``
 """
 
 from __future__ import annotations
@@ -37,8 +33,6 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEMO_PATH = REPO_ROOT / "text_detection_baselines" / "datasets" / "data" / "demo.jsonl"
-SINGLE_DOC_FIXTURE = REPO_ROOT / "tests" / "data" / "test_single_doc_per_author.json"
-MULTI_DOC_FIXTURE = REPO_ROOT / "tests" / "data" / "test_multi_docs_per_author.json"
 
 SEED = 20260811
 DATASET_NAME = "demo-synthetic"
@@ -276,60 +270,14 @@ def build_demo() -> list[dict[str, Any]]:
     return rows
 
 
-# The fixtures reproduce the record counts, label mixes, category sets, and
-# per-author grouping of the corpus-derived files they replace, so the existing
-# assertions in tests/test_datasets.py continue to describe the same shapes.
-SINGLE_DOC_PLAN = [("Human", 9, 0), ("Task", 0, 7), ("Summary", 0, 10)]
-MULTI_DOC_PLAN = [("Human", 6, 0), ("Task", 0, 10), ("Summary", 0, 10)]
-MULTI_DOC_AUTHOR_SIZES = [3, 3, 10, 10]
-
-
-def _fixture_rows(rng: random.Random, plan: list[tuple[str, int, int]]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for category, n_human, n_machine in plan:
-        for is_human in [True] * n_human + [False] * n_machine:
-            rows.append(_record(rng, is_human=is_human, category=category))
-    rng.shuffle(rows)
-    for idx, row in enumerate(rows, start=1):
-        row["question_id"] = idx
-        row["dataset"] = DATASET_NAME
-        row["temperature"] = "n/a" if row["label"] == "real" else 1
-        row["max_tokens"] = "n/a" if row["label"] == "real" else 512
-    return rows
-
-
-def build_single_doc_fixture() -> list[dict[str, Any]]:
-    """Build the 26-record fixture with one document per author."""
-    rng = random.Random(SEED + 1)
-    rows = _fixture_rows(rng, SINGLE_DOC_PLAN)
-    for idx, row in enumerate(rows, start=1):
-        row["author_id"] = 1000 + idx
-    return rows
-
-
-def build_multi_doc_fixture() -> list[dict[str, Any]]:
-    """Build the 26-record fixture with several documents per author."""
-    rng = random.Random(SEED + 2)
-    rows = _fixture_rows(rng, MULTI_DOC_PLAN)
-    author_ids = [author_id for author_id, size in enumerate(MULTI_DOC_AUTHOR_SIZES, start=1) for _ in range(size)]
-    if len(author_ids) != len(rows):
-        raise AssertionError(f"author plan covers {len(author_ids)} rows but built {len(rows)}")
-    for row, author_id in zip(rows, author_ids):
-        row["author_id"] = author_id
-    return rows
-
-
 _FIELD_ORDER = [
     "id",
-    "author_id",
     "dataset",
     "contribution_level",
     "text_author",
     "question_id",
     "question",
     "answer",
-    "temperature",
-    "max_tokens",
     "label",
 ]
 
@@ -344,13 +292,6 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(_ordered(row), ensure_ascii=False) + "\n")
-
-
-def write_json_array(path: Path, rows: list[dict[str, Any]]) -> None:
-    """Write records as an indented JSON array."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = [_ordered(row) for row in rows]
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 #: Character length below which every stub flags a sample out-of-distribution.
@@ -372,20 +313,11 @@ def check_token_budget(rows: list[dict[str, Any]], label: str) -> None:
 
 
 def main() -> None:
-    """Regenerate every synthetic data file."""
+    """Regenerate the ``demo`` dataset."""
     demo = build_demo()
     check_token_budget(demo, "demo")
-    single_doc = build_single_doc_fixture()
-    multi_doc = build_multi_doc_fixture()
-    check_token_budget(single_doc, "single-doc fixture")
-    check_token_budget(multi_doc, "multi-doc fixture")
-
     write_jsonl(DEMO_PATH, demo)
-    write_json_array(SINGLE_DOC_FIXTURE, single_doc)
-    write_json_array(MULTI_DOC_FIXTURE, multi_doc)
     print(f"wrote {len(demo)} records to {DEMO_PATH.relative_to(REPO_ROOT)}")
-    print(f"wrote {len(single_doc)} records to {SINGLE_DOC_FIXTURE.relative_to(REPO_ROOT)}")
-    print(f"wrote {len(multi_doc)} records to {MULTI_DOC_FIXTURE.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":
