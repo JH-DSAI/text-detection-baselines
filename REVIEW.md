@@ -308,27 +308,6 @@ say so in a comment.
 
 ## Testing
 
-### R16. `.coveragerc` silently excludes every `__init__.py` — Medium
-
-`omit = **/_*.py` ([.coveragerc](.coveragerc)) matches `__init__.py`. Confirmed against the
-current `coverage.json`, whose file list contains none of them:
-
-```
-text_detection_baselines/cli.py, datasets/file.py, evaluate.py, util.py,
-metrics/{calibration,detection,selective}.py, models/{base,length_heuristic,prompting_smol,torch_linear}.py
-```
-
-The omitted files are exactly where the extension points live — `build_model` and
-`register_model` in `models/__init__.py`, `run_all_metrics`, `register_metric`, and
-`normalize_metric_value` in `metrics/__init__.py`, and the whole dataset registry in
-`datasets/__init__.py`. Those functions *are* exercised by the test suite; they are just not
-measured, so the reported 82.7% describes a smaller package than the one that ships, and CI's
-`PATCH_MIN_THRESHOLD: 80` diff-cover gate ([.github/workflows/ci.yml](.github/workflows/ci.yml))
-cannot see changes to them at all.
-
-**Direction:** replace the pattern with explicit entries (`_version.py`, `setup.py`,
-`*/tests/*`). Expect the headline number to move; that movement is the point.
-
 ### R17. `main()` is entirely untested — Medium
 
 `cli.py` sits at 77.7% with all 39 missed lines in the command body: flag resolution,
@@ -603,7 +582,7 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 1. **R1** — start the licence review now; it has the longest lead time and nothing else unblocks it.
 2. **R2**, **R3**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
 3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
-4. **R16**, **R17** — make the test signal trustworthy before building on it.
+4. **R17** — make the test signal trustworthy before building on it.
 5. **R11**, **R12**, **R13**, **R14** — the PyPI gate, as one batch when a release is in view.
 6. **R25**, **R26**, **R27** — documentation, before announcing to anyone outside.
 7. **R33**, **R34** — settle before the Azure integration starts, not during.
