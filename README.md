@@ -24,6 +24,118 @@ To do:
 pixi run main
 ```
 
+## Metrics
+
+Metrics are computed per (dataset, model) pair and again per `contribution_level`
+category.
+
+Scores follow one convention throughout: **higher means more likely
+machine-generated**, and labels are `0` = human, `1` = machine.
+
+### Detection metrics
+
+Defined in [metrics/detection.py](text_detection_baselines/metrics/detection.py).
+All four ranking metrics are computed on **non-OOD samples only** and return `null`
+when that subset is empty or contains just one class.
+
+| Registry key | Table | Description |
+| --- | --- | --- |
+| `auroc` | AUROC | Area under the ROC curve. |
+| `auroc_at_1pct` | AUROC@1% | Partial AUROC over the FPR ≤ 1% region — the regime a deployed detector actually operates in. See the note on its scaling below. |
+| `average_precision` | AP | Average precision. The preferred precision-recall summary. |
+| `pr_auc` | — | Trapezoidal area under the PR curve. Retained for continuity; prefer `average_precision`. Exported but not shown in the console. |
+| `fpr_at_tau` | FPR@tau | False positive rate at the learned threshold, among human samples. |
+| `tpr_at_tau` | TPR@tau | True positive rate at the learned threshold, among machine samples. |
+| `calibration_gap` | CalGap | `abs(fpr_at_tau - target_alpha)`, i.e. how far threshold learning missed its FPR budget. |
+| `ood_percent` | OOD% | Percentage of samples flagged out-of-distribution. |
+
+The threshold `tau` is learned per run as the `1 - target_alpha` quantile of
+non-OOD human scores, and a sample is flagged machine when `score >= tau`
+(inclusive). `--target-alpha` defaults to 0.05.
+
+### Calibration metrics
+
+Defined in [metrics/calibration.py](text_detection_baselines/metrics/calibration.py).
+Both are registered with `requires_normalized_scores=True`, so they are computed
+only for models whose scores lie in `[0, 1]` and are omitted entirely — not set to
+`null` — for raw-score models.
+
+| Registry key | Table | Description |
+| --- | --- | --- |
+| `brier` | Brier | Mean squared error between score and binary label. |
+| `ece` | ECE | Expected calibration error over 10 equal-width bins. |
+
+### Selective prediction
+
+`compute_abstention_curve` in
+[metrics/selective.py](text_detection_baselines/metrics/selective.py) sweeps an
+uncertainty threshold from tight to full coverage and reports coverage, accuracy,
+AUROC, and partial AUROC on the retained samples at each point.
+
+It returns parallel curves rather than a scalar, so it is **not** in the registry
+and does not appear in the console tables or exports. Call it
+directly:
+
+```python
+from text_detection_baselines.metrics import compute_abstention_curve
+
+curve = compute_abstention_curve(
+    scores=scores, labels=labels, variances=variances, tau=tau,
+)
+```
+
+It needs a per-sample `variances` array that no detector in this package currently
+exposes, so the caller must supply one.
+
+### Implementation notes and discrepancies
+
+Details that are easy to misread, and points where this implementation
+deliberately diverges from the researchers' implementation:
+
+* **`auroc_at_1pct` is not a raw partial area.** It is the McClish-standardized
+  partial AUC that `sklearn.metrics.roc_auc_score(..., max_fpr=0.01)` returns: the
+  raw area over FPR ≤ 0.01, rescaled so a random ranker scores 0.5 and a perfect
+  ranker 1.0. The rescaling is **not clamped** — a ranker worse than chance in the
+  low-FPR region scores below 0.5 (`fixed-linear-raw` scores 0.4976 on `gede`).
+
+* **Ranking metrics exclude OOD-flagged samples; the abstention curve does not.**
+  `auroc`, `auroc_at_1pct`, `average_precision`, and `pr_auc` all restrict to
+  `~ood_flags`, so they will not reproduce values computed over the whole
+  population. `compute_abstention_curve` currently takes no `ood_flags` argument
+  and so is a whole-population measure — its AUROC is not comparable to `auroc`
+  from the same run.
+
+* **`average_precision` and `pr_auc` disagree, sometimes materially.** Trapezoidal
+  integration interpolates between operating points that cannot be achieved;
+  scikit-learn documents it as misleading. Both are exported so the two can be
+  compared, but only AP is shown in the console. The gap reaches 3.4 points on
+  `fixed-linear-normalized`.
+
+* **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
+  so every model scores AP above 0.93 regardless of ranking quality.
+  `fixed-linear-normalized` has AUROC exactly 0.5 — no ranking signal at all — and
+  scores AP 0.9327, which *is* the prevalence to four decimal places. Read AP only
+  against that floor, and never compare it across slices with different base rates.
+
+* **ECE clips scores into `[0, 1]` before binning.** The reference implementation
+  did not, which silently dropped out-of-range probabilities from the numerator
+  while still counting them in the denominator.
+
+* **Threshold comparisons are inclusive (`score >= tau`) everywhere.** This matches
+  the detectors' own prediction rule (`preds = scores >= 0.0` for raw scores,
+  `>= 0.5` for normalized) and keeps the abstention curve's full-coverage point
+  consistent with `fpr_at_tau` / `tpr_at_tau`. Because `tau` is an empirical
+  quantile, the convention is decidable rather than measure-zero: at
+  `target_alpha = 1.0` only the inclusive form yields FPR = 1.0 as intended, while
+  at `target_alpha = 0` it flags at least one human and so yields FPR > 0.
+
+* **Exported values are rounded to 4 decimal places** by `safe_round` in
+  `run_all_metrics`. Adequate for reading, lossy for significance testing.
+
+* **Per-category ranking metrics are `null` on `gede`.** Every
+  `contribution_level` category in that dataset contains exactly one label, so all
+  four ranking metrics are undefined for every category row.
+
 ## Common commands
 
 ```bash
