@@ -144,7 +144,11 @@ def render_console_tables(tree: dict[str, Any]) -> None:
 
     # ── Overall metrics ──────────────────────────────────────────────
     overall_rows = _flatten_overall(tree)
-    summary = Table(title="Text Detection Metrics", show_lines=False)
+    summary = Table(
+        title="Text Detection Metrics",
+        caption="All models are stubs. dummy-* use fixed, arbitrary weights fit to nothing.",
+        show_lines=False,
+    )
     for col in ("dataset", "model", "AUROC", "AUROC@1%", "AP", "FPR@tau", "TPR@tau", "CalGap", "OOD%", "tau"):
         summary.add_column(col, justify="left" if col in {"dataset", "model"} else "right")
 

@@ -19,10 +19,13 @@ except ImportError:  # pragma: no cover
 
 
 class TorchLinearStubDetector(StubTextDetector):
-    """Linear detector stub backed by a PyTorch layer with fixed weights.
+    """Dummy detector stub backed by a PyTorch layer with arbitrary weights.
 
-    Uses a fixed parameter initialisation so that scores are deterministic
-    without any training loop.
+    The weights are hard-coded constants chosen by hand and fit to no data, so
+    this model carries no detection signal: it exists to produce deterministic,
+    realistic-looking scores for exercising the evaluation pipeline. Any
+    apparent skill on a dataset is an artifact of that dataset's feature
+    distribution, not of the model.
 
     When *normalized_scores* is True the raw logit is passed through a sigmoid
     and scores are in ``[0, 1]``.  When False the raw logit is used directly as

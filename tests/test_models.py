@@ -26,19 +26,19 @@ _TEXTS = [
 
 
 def test_build_stub_model_length_normalized():
-    model = build_stub_model("length-normalized", ood_margin=0.05, seed=1)
+    model = build_stub_model("length", ood_margin=0.05, seed=1)
     assert isinstance(model, LengthHeuristicStubDetector)
     assert model.normalized_scores is True
 
 
 def test_build_stub_model_torch_normalized():
-    model = build_stub_model("fixed-linear-normalized", ood_margin=0.05, seed=1)
+    model = build_stub_model("dummy-norm", ood_margin=0.05, seed=1)
     assert isinstance(model, TorchLinearStubDetector)
     assert model.normalized_scores is True
 
 
 def test_build_stub_model_torch_raw():
-    model = build_stub_model("fixed-linear-raw", ood_margin=0.05, seed=1)
+    model = build_stub_model("dummy-raw", ood_margin=0.05, seed=1)
     assert isinstance(model, TorchLinearStubDetector)
     assert model.normalized_scores is False
 
@@ -49,7 +49,7 @@ def test_build_stub_model_invalid_raises():
 
 
 def test_length_heuristic_output_shape():
-    model = LengthHeuristicStubDetector("length-normalized", normalized_scores=True, ood_margin=0.05, seed=1)
+    model = LengthHeuristicStubDetector("length", normalized_scores=True, ood_margin=0.05, seed=1)
     output = model.predict(_TEXTS)
     assert isinstance(output, StubModelOutput)
     assert output.scores.shape == (3,)
@@ -58,29 +58,29 @@ def test_length_heuristic_output_shape():
 
 
 def test_length_heuristic_scores_normalized():
-    model = LengthHeuristicStubDetector("length-normalized", normalized_scores=True, ood_margin=0.0, seed=1)
+    model = LengthHeuristicStubDetector("length", normalized_scores=True, ood_margin=0.0, seed=1)
     output = model.predict(_TEXTS)
     assert np.all(output.scores >= 0.0)
     assert np.all(output.scores <= 1.0)
 
 
 def test_torch_raw_scores_unbounded():
-    model = TorchLinearStubDetector("fixed-linear-raw", normalized_scores=False, ood_margin=0.0, seed=1)
+    model = TorchLinearStubDetector("dummy-raw", normalized_scores=False, ood_margin=0.0, seed=1)
     output = model.predict(_TEXTS)
     # Raw scores can be outside [0, 1]
     assert output.scores.shape == (3,)
 
 
 def test_torch_normalized_scores_in_unit_interval():
-    model = TorchLinearStubDetector("fixed-linear-normalized", normalized_scores=True, ood_margin=0.0, seed=1)
+    model = TorchLinearStubDetector("dummy-norm", normalized_scores=True, ood_margin=0.0, seed=1)
     output = model.predict(_TEXTS)
     assert np.all(output.scores >= 0.0)
     assert np.all(output.scores <= 1.0)
 
 
 def test_determinism_same_seed():
-    model1 = build_stub_model("fixed-linear-normalized", ood_margin=0.05, seed=42)
-    model2 = build_stub_model("fixed-linear-normalized", ood_margin=0.05, seed=42)
+    model1 = build_stub_model("dummy-norm", ood_margin=0.05, seed=42)
+    model2 = build_stub_model("dummy-norm", ood_margin=0.05, seed=42)
     out1 = model1.predict(_TEXTS)
     out2 = model2.predict(_TEXTS)
     np.testing.assert_array_equal(out1.scores, out2.scores)
@@ -93,12 +93,12 @@ def test_feature_matrix_shape():
 
 def test_model_registry_defaults_present():
     names = list_registered_models()
-    assert names == ["fixed-linear-normalized", "fixed-linear-raw", "length-normalized", "smollm2-prompting"]
-    assert get_default_model_names() == ("fixed-linear-normalized", "fixed-linear-raw", "length-normalized")
+    assert names == ["dummy-norm", "dummy-raw", "length", "smollm2"]
+    assert get_default_model_names() == ("dummy-norm", "dummy-raw", "length")
 
 
 def test_build_model_from_registry():
-    model = build_model("fixed-linear-raw", ood_margin=0.05, seed=1)
+    model = build_model("dummy-raw", ood_margin=0.05, seed=1)
     assert isinstance(model, TorchLinearStubDetector)
     assert model.normalized_scores is False
 
@@ -117,13 +117,13 @@ def test_register_model_runtime():
 
 
 def test_build_prompting_model_from_registry():
-    model = build_model("smollm2-prompting", ood_margin=0.05, seed=1)
+    model = build_model("smollm2", ood_margin=0.05, seed=1)
     assert isinstance(model, SmolLMPromptingDetector)
     assert model.normalized_scores is True
 
 
 def test_prompting_model_predict_shape_with_monkeypatch(monkeypatch):
-    model = SmolLMPromptingDetector("smollm2-prompting", normalized_scores=True, ood_margin=0.1, seed=1)
+    model = SmolLMPromptingDetector("smollm2", normalized_scores=True, ood_margin=0.1, seed=1)
 
     def fake_score_single(self, text: str) -> float:
         return 0.8 if "machine" in text else 0.2

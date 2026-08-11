@@ -104,7 +104,7 @@ resolution), or report a bootstrap interval alongside the point estimate.
 
 The McClish standardization maps a random ranker to 0.5 and a perfect ranker to
 1.0, but it does **not** clamp at 0.5: a ranker worse than chance in the low-FPR
-region scores below it. `fixed-linear-raw` scores 0.4976 on `gede`. Anyone reading
+region scores below it. `dummy-raw` scores 0.4976 on `gede`. Anyone reading
 this as a normalized AUROC-like quantity bounded below by 0.5 will be confused.
 
 **Direction:** note the actual range wherever the metric is surfaced. Already
@@ -133,11 +133,11 @@ divergence on `gede`:
 
 | model | `average_precision` | `pr_auc` (trapezoidal) |
 | --- | --- | --- |
-| fixed-linear-normalized | 0.9327 | 0.9664 |
-| fixed-linear-raw | 0.9300 | 0.9299 |
-| length-normalized | 0.9710 | 0.9710 |
+| dummy-norm | 0.9327 | 0.9664 |
+| dummy-raw | 0.9300 | 0.9299 |
+| length | 0.9710 | 0.9710 |
 
-The 3.4-point gap on `fixed-linear-normalized` arises because that model's scores
+The 3.4-point gap on `dummy-norm` arises because that model's scores
 are degenerate (AUROC exactly 0.5), leaving sparse PR points for the trapezoid to
 inflate across.
 
@@ -149,7 +149,7 @@ two similarly named columns side by side invite misreading.
 
 AP has the positive-class base rate as its floor. `gede` is 93.27% machine
 (12703/13619), which is why every model scores above 0.93 regardless of AUROC.
-`fixed-linear-normalized` scores AUROC exactly 0.5 — no ranking signal whatsoever —
+`dummy-norm` scores AUROC exactly 0.5 — no ranking signal whatsoever —
 and AP 0.9327, i.e. exactly the prevalence. A reader scanning the AP column would
 conclude that model is excellent. AP values from slices with different prevalence
 also cannot be compared to each other.

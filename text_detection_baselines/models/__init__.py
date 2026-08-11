@@ -71,20 +71,16 @@ def build_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetect
 
 
 def _torch_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector:
-    return TorchLinearStubDetector(
-        model_name="fixed-linear-normalized", normalized_scores=True, ood_margin=ood_margin, seed=seed
-    )
+    return TorchLinearStubDetector(model_name="dummy-norm", normalized_scores=True, ood_margin=ood_margin, seed=seed)
 
 
 def _torch_raw_factory(ood_margin: float, seed: int) -> StubTextDetector:
-    return TorchLinearStubDetector(
-        model_name="fixed-linear-raw", normalized_scores=False, ood_margin=ood_margin, seed=seed
-    )
+    return TorchLinearStubDetector(model_name="dummy-raw", normalized_scores=False, ood_margin=ood_margin, seed=seed)
 
 
 def _length_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector:
     return LengthHeuristicStubDetector(
-        model_name="length-normalized",
+        model_name="length",
         normalized_scores=True,
         ood_margin=ood_margin,
         seed=seed,
@@ -93,17 +89,17 @@ def _length_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector
 
 def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector:
     return SmolLMPromptingDetector(
-        model_name="smollm2-prompting",
+        model_name="smollm2",
         normalized_scores=True,
         ood_margin=ood_margin,
         seed=seed,
     )
 
 
-register_model("fixed-linear-normalized", _torch_normalized_factory)
-register_model("fixed-linear-raw", _torch_raw_factory)
-register_model("length-normalized", _length_normalized_factory)
-register_model("smollm2-prompting", _smollm2_prompting_factory, is_default=False)
+register_model("dummy-norm", _torch_normalized_factory)
+register_model("dummy-raw", _torch_raw_factory)
+register_model("length", _length_normalized_factory)
+register_model("smollm2", _smollm2_prompting_factory, is_default=False)
 
 
 def build_stub_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:

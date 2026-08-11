@@ -24,6 +24,23 @@ To do:
 pixi run main
 ```
 
+## Models
+
+Every model currently registered in [models/](text_detection_baselines/models/) is a **stub**.
+None of them are trained, and none should be treated as a working detector — they
+exist to exercise the evaluation pipeline end to end with realistic-looking outputs.
+
+| name | what it does |
+| --- | --- |
+| `dummy-norm` | Linear layer over four surface features (char length, token count, punctuation count, type-token ratio) with **hard-coded, arbitrary weights**. Logit passed through a sigmoid, so scores lie in `[0, 1]`. |
+| `dummy-raw` | Same arbitrary weights, raw logit reported as an unnormalized score. |
+| `length` | Hand-written heuristic: longer texts with lower type-token ratio and less punctuation score as more machine-like. An actual (weak, unvalidated) hypothesis, unlike the `dummy-*` pair. |
+| `smollm2` | Prompts a small local LLM. Not a default; opt in with `--model smollm2`. |
+
+The `dummy-*` weights were picked by hand and fit to nothing. Their metrics measure
+the harness, not detection quality, and any apparent skill they show on a dataset is
+an artifact of that dataset's length distribution.
+
 ## Metrics
 
 Metrics are computed per (dataset, model) pair and again per `contribution_level`
@@ -96,7 +113,7 @@ deliberately diverges from the researchers' implementation:
   partial AUC that `sklearn.metrics.roc_auc_score(..., max_fpr=0.01)` returns: the
   raw area over FPR ≤ 0.01, rescaled so a random ranker scores 0.5 and a perfect
   ranker 1.0. The rescaling is **not clamped** — a ranker worse than chance in the
-  low-FPR region scores below 0.5 (`fixed-linear-raw` scores 0.4976 on `gede`).
+  low-FPR region scores below 0.5 (`dummy-raw` scores 0.4976 on `gede`).
 
 * **Ranking metrics exclude OOD-flagged samples; the abstention curve does not.**
   `auroc`, `auroc_at_1pct`, `average_precision`, and `pr_auc` all restrict to
@@ -109,11 +126,11 @@ deliberately diverges from the researchers' implementation:
   integration interpolates between operating points that cannot be achieved;
   scikit-learn documents it as misleading. Both are exported so the two can be
   compared, but only AP is shown in the console. The gap reaches 3.4 points on
-  `fixed-linear-normalized`.
+  `dummy-norm`.
 
 * **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
   so every model scores AP above 0.93 regardless of ranking quality.
-  `fixed-linear-normalized` has AUROC exactly 0.5 — no ranking signal at all — and
+  `dummy-norm` has AUROC exactly 0.5 — no ranking signal at all — and
   scores AP 0.9327, which *is* the prevalence to four decimal places. Read AP only
   against that floor, and never compare it across slices with different base rates.
 

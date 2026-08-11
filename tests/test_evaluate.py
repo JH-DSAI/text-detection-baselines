@@ -194,7 +194,7 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
     dataset_path = tmp_path / "toy.jsonl"
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
 
-    model = build_stub_model("length-normalized", ood_margin=0.01, seed=7)
+    model = build_stub_model("length", ood_margin=0.01, seed=7)
     overall, per_cat = evaluate_model_on_dataset(
         dataset_path=dataset_path,
         model=model,
