@@ -190,22 +190,7 @@ identically to a 1832-sample one.
 **Direction:** report bootstrap confidence intervals, or flag categories below a
 minimum size.
 
-### 13. All exported metrics are rounded to 4 decimal places — RESOLVED
-
-`run_all_metrics` applied `safe_round(value)` with the default `ndigits=4`, so the
-JSON/YAML/CSV exports were lossy. Fine for reading a table, lossy for paired
-significance testing between two close models.
-
-**Resolved:** `safe_round` is now `normalize_metric_value`, which drops the rounding
-and keeps a widened `None` guard: NaN and ±inf all map to `None`, since
-`json.dumps` would otherwise write the invalid literals `NaN` / `Infinity`.
-Rounding happens only in `_fmt`
-([cli.py](text_detection_baselines/cli.py)) at render time. `_base_counts`
-([evaluate.py](text_detection_baselines/evaluate.py)) also no longer rounds `tau`:
-the rounded copy did not reproduce the reported `fpr_at_tau` / `tpr_at_tau`, since
-`flags` is derived from the exact quantile.
-
-### 14. Console table columns are hard-coded positionally
+### 13. Console table columns are hard-coded positionally
 
 The registry is fully dynamic on the producer side, but `render_console_tables`
 ([cli.py](text_detection_baselines/cli.py)) hard-codes each column header and cell
@@ -216,7 +201,7 @@ CSV/JSON/YAML export needs no change, which makes the asymmetry easy to forget.
 **Direction:** give `MetricSpec` a display-name and ordering field and derive the
 table columns from the registry.
 
-### 15. The per-category table overflows an 80-column terminal
+### 14. The per-category table overflows an 80-column terminal
 
 Now at 11 columns (13 for normalized-score models), headers truncate to `AURO…`
 and dataset names to `dat…`.
