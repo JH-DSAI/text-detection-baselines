@@ -173,8 +173,9 @@ deliberately diverges from the researchers' implementation:
   `target_alpha = 1.0` only the inclusive form yields FPR = 1.0 as intended, while
   at `target_alpha = 0` it flags at least one human and so yields FPR > 0.
 
-* **Exported values are rounded to 4 decimal places** by `safe_round` in
-  `run_all_metrics`. Adequate for reading, lossy for significance testing.
+* **Exported values carry full precision; only the console rounds.** The
+  CSV/JSON/YAML exports hold the unrounded metric, so they remain usable for
+  paired significance testing between two close models.
 
 * **Per-category ranking metrics are `null` on `gede`.** Every
   `contribution_level` category in that dataset contains exactly one label, so all

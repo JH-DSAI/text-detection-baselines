@@ -33,7 +33,7 @@ import numpy as np
 
 from .datasets import load_dataset as load_dataset_batch
 from .datasets.file import normalize_label as normalize_label_value
-from .metrics import run_all_metrics, safe_round
+from .metrics import run_all_metrics
 from .models.base import StubModelOutput, StubTextDetector
 
 LOGGER = logging.getLogger(__name__)
@@ -70,12 +70,17 @@ def normalize_label(raw_label: Any) -> int:
 
 
 def _base_counts(labels: np.ndarray, tau: float, target_alpha: float) -> dict[str, Any]:
-    """Compute non-derived counts and threshold metadata for one data slice."""
+    """Compute non-derived counts and threshold metadata for one data slice.
+
+    ``tau`` is reported at full precision: it is the exact threshold used to
+    derive ``flags``, so a rounded copy would no longer reproduce the reported
+    ``fpr_at_tau`` / ``tpr_at_tau``.
+    """
     return {
         "n_samples": int(labels.size),
         "n_human": int((labels == 0).sum()),
         "n_machine": int((labels == 1).sum()),
-        "tau": safe_round(tau),
+        "tau": float(tau),
         "target_alpha": target_alpha,
     }
 

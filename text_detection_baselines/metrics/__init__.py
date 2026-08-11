@@ -49,11 +49,21 @@ def register_metric(
     return decorator
 
 
-def safe_round(value: float | None, ndigits: int = 4) -> float | None:
-    """Round a numeric value while preserving None / NaN."""
+def normalize_metric_value(value: float | None) -> float | None:
+    """Coerce a metric result to a plain float, mapping ``None`` and NaN to ``None``.
+
+    A NaN would serialize as the bare literal ``NaN`` in JSON — which strict
+    parsers reject — and as ``.nan`` in YAML, so it is normalized to ``None``
+    here rather than at each metric's return site.
+
+    Raises:
+        TypeError: If ``value`` is not float-coercible.  Curve-valued metrics
+            cannot enter the registry until :data:`MetricFunc` widens to admit
+            them.
+    """
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
-    return round(float(value), ndigits)
+    return float(value)
 
 
 def run_all_metrics(
@@ -72,7 +82,7 @@ def run_all_metrics(
         if spec.requires_normalized_scores and not normalized_scores:
             continue
         value = spec.func(labels, scores, ood_flags, flags, target_alpha, tau)
-        results[name] = safe_round(value)
+        results[name] = normalize_metric_value(value)
     return results
 
 

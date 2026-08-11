@@ -9,9 +9,9 @@ from text_detection_baselines.metrics import (
     METRIC_REGISTRY,
     compute_abstention_curve,
     list_registered_metrics,
+    normalize_metric_value,
     register_metric,
     run_all_metrics,
-    safe_round,
 )
 from text_detection_baselines.metrics.calibration import brier_metric, ece_metric, expected_calibration_error
 from text_detection_baselines.metrics.detection import (
@@ -180,7 +180,7 @@ def test_register_metric_decorator_and_run_all(metric_inputs):
             normalized_scores=True,
         )
         assert "dummy_metric" in METRIC_REGISTRY
-        assert results["dummy_metric"] == 0.1235
+        assert results["dummy_metric"] == 0.123456
     finally:
         METRIC_REGISTRY.pop("dummy_metric", None)
 
@@ -202,20 +202,25 @@ def test_run_all_metrics_skips_normalized_only_for_raw(metric_inputs):
 
 
 # ---------------------------------------------------------------------------
-# safe_round / expected_calibration_error
+# normalize_metric_value / expected_calibration_error
 # ---------------------------------------------------------------------------
 
 
-def test_safe_round_none():
-    assert safe_round(None) is None
+def test_normalize_metric_value_none():
+    assert normalize_metric_value(None) is None
 
 
-def test_safe_round_nan():
-    assert safe_round(float("nan")) is None
+def test_normalize_metric_value_nan():
+    assert normalize_metric_value(float("nan")) is None
 
 
-def test_safe_round_value():
-    assert safe_round(0.123456, 4) == 0.1235
+def test_normalize_metric_value_preserves_full_precision():
+    assert normalize_metric_value(0.123456789012) == 0.123456789012
+
+
+def test_normalize_metric_value_rejects_curve():
+    with pytest.raises(TypeError):
+        normalize_metric_value([0.1, 0.2])  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

@@ -47,7 +47,7 @@ consistent.
 ### 3. Curves cannot enter the metric registry, and there is no scalar summary
 
 `MetricFunc` is typed `-> float | None` and `run_all_metrics` pipes every result
-through `safe_round`, which raises on a list. So the curve cannot be registered,
+through `normalize_metric_value`, which raises on a list. So the curve cannot be registered,
 cannot appear in the console tables, and cannot appear in the CSV/JSON/YAML
 exports. It is reachable only by importing the function directly.
 
@@ -181,14 +181,19 @@ identically to a 1832-sample one.
 **Direction:** report bootstrap confidence intervals, or flag categories below a
 minimum size.
 
-### 13. All exported metrics are rounded to 4 decimal places
+### 13. All exported metrics are rounded to 4 decimal places — RESOLVED
 
-`run_all_metrics` applies `safe_round(value)` with the default `ndigits=4`, so the
-JSON/YAML/CSV exports are lossy. Fine for reading a table, lossy for paired
+`run_all_metrics` applied `safe_round(value)` with the default `ndigits=4`, so the
+JSON/YAML/CSV exports were lossy. Fine for reading a table, lossy for paired
 significance testing between two close models.
 
-**Direction:** keep full precision in the structured exports and round only at the
-console-rendering layer.
+**Resolved:** `safe_round` is now `normalize_metric_value`, which keeps the NaN and
+`None` handling — a NaN would otherwise serialize as the invalid JSON literal `NaN`
+— and drops the rounding. Rounding happens only in `_fmt`
+([cli.py](text_detection_baselines/cli.py)) at render time. `_base_counts`
+([evaluate.py](text_detection_baselines/evaluate.py)) also no longer rounds `tau`:
+the rounded copy did not reproduce the reported `fpr_at_tau` / `tpr_at_tau`, since
+`flags` is derived from the exact quantile.
 
 ### 14. Console table columns are hard-coded positionally
 

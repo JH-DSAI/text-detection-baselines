@@ -3,9 +3,9 @@
 Unlike the metrics in :mod:`~text_detection_baselines.metrics.detection` and
 :mod:`~text_detection_baselines.metrics.calibration`, the function here returns a
 *curve* rather than a scalar, so it is not registered in ``METRIC_REGISTRY``
-(:func:`~text_detection_baselines.metrics.run_all_metrics` reduces every metric
-through :func:`~text_detection_baselines.metrics.safe_round`, which expects a
-scalar).  Call it directly instead.
+(:func:`~text_detection_baselines.metrics.run_all_metrics` passes every metric
+through :func:`~text_detection_baselines.metrics.normalize_metric_value`, which
+expects a scalar).  Call it directly instead.
 """
 
 from __future__ import annotations
