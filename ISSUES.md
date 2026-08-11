@@ -34,8 +34,9 @@ cannot travel through the current metric registry.
 
 ### 2. The curve ignores `ood_flags`
 
-Every registered ranking metric restricts itself to non-OOD samples via
-`_non_ood_binary`. `compute_abstention_curve` takes no `ood_flags` argument at all,
+Every registered metric restricts itself to non-OOD samples — the ranking metrics
+via `_non_ood_binary`, `brier` and `ece` via `_non_ood`.
+`compute_abstention_curve` takes no `ood_flags` argument at all,
 so its AUROC values are computed over the full sample set and are **not**
 comparable to the `auroc` reported for the same run.
 
@@ -160,6 +161,12 @@ On `gede`, every `contribution_level` category contains exactly one label:
 So three of the eleven per-category columns are `-` for every row. This is a
 property of the dataset, not a metric bug, but it makes the per-category table
 substantially less useful than it appears.
+
+Note when reconciling against older result tables: the reference implementation did
+not guard this case. It returned `pr_auc = 1.0` for each of the eight all-machine
+categories and `0.5` for `Human`, plus `roc_auc = nan` with a warning rather than an
+error — values that depend only on the label vector, so they were identical for
+every model.
 
 **Direction:** decide what per-category evaluation should mean here. Options:
 score each machine category against the shared human pool (which makes AUROC

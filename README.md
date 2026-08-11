@@ -74,7 +74,9 @@ non-OOD human scores, and a sample is flagged machine when `score >= tau`
 Defined in [metrics/calibration.py](text_detection_baselines/metrics/calibration.py).
 Both are registered with `requires_normalized_scores=True`, so they are computed
 only for models whose scores lie in `[0, 1]` and are omitted entirely — not set to
-`null` — for raw-score models.
+`null` — for raw-score models. Both are computed on **non-OOD samples only**, like
+the ranking metrics, and return `null` when every sample is flagged OOD. Unlike the
+ranking metrics they do not require both classes to be present.
 
 | Registry key | Table | Description |
 | --- | --- | --- |
@@ -114,12 +116,18 @@ deliberately diverges from the researchers' implementation:
   ranker 1.0. The rescaling is **not clamped** — a ranker worse than chance in the
   low-FPR region scores below 0.5 (`dummy-raw` scores 0.4976 on `gede`).
 
-* **Ranking metrics exclude OOD-flagged samples; the abstention curve does not.**
-  `auroc`, `auroc_at_1pct`, and `average_precision` all restrict to `~ood_flags`,
-  so they will not reproduce values computed over the whole population.
+* **Registered metrics exclude OOD-flagged samples; the abstention curve does not.**
+  `auroc`, `auroc_at_1pct`, `average_precision`, `brier`, and `ece` all restrict to
+  `~ood_flags`, so they will not reproduce values computed over the whole
+  population, and every column of a results row describes the same sample set.
   `compute_abstention_curve` currently takes no `ood_flags` argument and so is a
   whole-population measure — its AUROC is not comparable to `auroc` from the same
   run.
+
+  The reference implementation had no OOD notion at all. Its calibration numbers
+  therefore correspond to the whole population: on `gede`, `length` reports Brier
+  0.1126 / ECE 0.2300 over all samples against 0.1113 / 0.2309 over the 98.9% that
+  are non-OOD.
 
 * **`average_precision` is the only PR summary reported.** A trapezoidal PR-AUC
   was previously exported alongside it and has been removed: linear interpolation
@@ -128,6 +136,24 @@ deliberately diverges from the researchers' implementation:
   up to 3.4 points on `dummy-norm`, whose degenerate scores leave sparse PR points
   for the trapezoid to inflate across. Earlier numbers reported under a `pr_auc`
   column are not comparable to `average_precision`.
+
+  How far apart the two estimators land is governed by score granularity, not by the
+  data. Measured at n=4000 with a fixed signal, quantizing the scores to a given
+  number of distinct values:
+
+  | distinct scores | trapezoidal PR-AUC | AP | difference |
+  | --- | --- | --- | --- |
+  | 2 | 0.788125 | 0.656056 | +0.132069 |
+  | 5 | 0.798885 | 0.745213 | +0.053672 |
+  | 25 | 0.797125 | 0.786356 | +0.010768 |
+  | 100 | 0.795676 | 0.793066 | +0.002610 |
+  | 4000 (continuous) | 0.794817 | 0.794931 | −0.000114 |
+
+  On the continuous-score detectors the two agree to within 1e-4 (`length` differs
+  by 2e-6 on `gede`, `dummy-raw` by 6.5e-5), which is why historical numbers from
+  those models remain readable. The inflation is worst when a score vector collapses
+  entirely: the trapezoid then returns `prevalence + (1 - prevalence)/2` exactly,
+  which is how `dummy-norm` read 0.9664 against its true AP of 0.9327.
 
 * **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
   so every model scores AP above 0.93 regardless of ranking quality.

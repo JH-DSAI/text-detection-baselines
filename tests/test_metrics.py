@@ -25,6 +25,7 @@ from text_detection_baselines.metrics.detection import (
 )
 
 _RANKING_METRICS = [auroc_metric, auroc_at_1pct_metric, average_precision_metric]
+_CALIBRATION_METRICS = [brier_metric, ece_metric]
 
 
 @pytest.fixture
@@ -95,8 +96,43 @@ def test_ranking_metrics_none_when_all_samples_ood(metric):
 
 def test_calibration_metrics(metric_inputs):
     labels, scores, ood_flags, flags, target_alpha, tau = metric_inputs
-    assert brier_metric(labels, scores, ood_flags, flags, target_alpha, tau) == pytest.approx(0.1175)
+    # The OOD sample (0.9, label 1) is excluded, so the mean is over three samples.
+    assert brier_metric(labels, scores, ood_flags, flags, target_alpha, tau) == pytest.approx(0.46 / 3)
     assert 0.0 <= ece_metric(labels, scores, ood_flags, flags, target_alpha, tau) <= 1.0
+
+
+@pytest.mark.parametrize("metric", _CALIBRATION_METRICS)
+def test_calibration_metrics_exclude_ood_samples(metric):
+    """Calibration restricts to non-OOD samples, matching the ranking metrics."""
+    labels = np.array([0, 1], dtype=int)
+    scores = np.array([0.2, 0.2], dtype=float)
+    ood_flags = np.array([False, True], dtype=bool)
+
+    kept_only = metric(labels[:1], scores[:1], np.zeros(1, dtype=bool), np.zeros(1, dtype=bool), 0.05, 0.5)
+    assert metric(labels, scores, ood_flags, ood_flags, 0.05, 0.5) == pytest.approx(kept_only)
+    # The whole-population value differs, so the restriction is load-bearing here.
+    assert metric(labels, scores, np.zeros(2, dtype=bool), ood_flags, 0.05, 0.5) != pytest.approx(kept_only)
+
+
+@pytest.mark.parametrize("metric", _CALIBRATION_METRICS)
+def test_calibration_metrics_none_when_all_samples_ood(metric):
+    labels = np.array([0, 1], dtype=int)
+    scores = np.array([0.1, 0.9], dtype=float)
+    ood_flags = np.ones(2, dtype=bool)
+    assert metric(labels, scores, ood_flags, ood_flags, 0.05, 0.5) is None
+
+
+def test_average_precision_on_constant_scores_equals_prevalence():
+    """AP floors at the base rate; a trapezoidal PR-AUC would read prev + (1-prev)/2."""
+    labels = np.array([0, 1, 1, 1], dtype=int)
+    scores = np.full(4, 0.5, dtype=float)
+    ood_flags = np.zeros(4, dtype=bool)
+
+    prevalence = float(labels.mean())
+    assert average_precision_metric(labels, scores, ood_flags, ood_flags, 0.05, 0.5) == pytest.approx(prevalence)
+    assert average_precision_metric(labels, scores, ood_flags, ood_flags, 0.05, 0.5) != pytest.approx(
+        prevalence + (1.0 - prevalence) / 2.0
+    )
 
 
 def test_expected_calibration_error_exact():
