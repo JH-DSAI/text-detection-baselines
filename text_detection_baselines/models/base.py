@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,7 +22,7 @@ class StubModelOutput:
     """True where the sample is flagged as out-of-distribution."""
 
 
-class StubTextDetector:
+class StubTextDetector(ABC):
     """Abstract interface for all stub detector implementations."""
 
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
@@ -30,8 +31,8 @@ class StubTextDetector:
         self.ood_margin = ood_margin
         self.seed = seed
 
-    def predict(self, texts: list[str]) -> StubModelOutput:  # pragma: no cover - abstract
-        raise NotImplementedError
+    @abstractmethod
+    def predict(self, texts: list[str]) -> StubModelOutput: ...
 
     @staticmethod
     def _feature_matrix(texts: list[str]) -> np.ndarray:
