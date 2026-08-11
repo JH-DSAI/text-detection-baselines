@@ -10,6 +10,7 @@ from text_detection_baselines.cli import (
     NAME_PATH,
     _flatten_overall,
     _flatten_per_category,
+    _raise_for_unavailable_dataset,
     _raise_for_unknown_names,
     _resolve_selection,
     _unique_preserve_order,
@@ -17,6 +18,7 @@ from text_detection_baselines.cli import (
     export_results,
     render_console_tables,
 )
+from text_detection_baselines.datasets import DatasetSpec
 
 
 def test_resolve_selection_uses_defaults_when_not_all():
@@ -465,3 +467,32 @@ def test_name_path_param_type_parses_name_and_existing_path(tmp_path):
 
     assert name == "runtime"
     assert parsed_path == Path(data_path)
+
+
+def test_raise_for_unavailable_dataset_passes_for_a_present_file(tmp_path):
+    path = tmp_path / "present.jsonl"
+    path.write_text('{"answer":"a","label":"real"}\n', encoding="utf-8")
+    spec = DatasetSpec(name="present", dataset_type="file", path=path)
+
+    _raise_for_unavailable_dataset(spec)
+
+
+def test_raise_for_unavailable_dataset_points_gede_at_the_prepare_command(tmp_path):
+    spec = DatasetSpec(name="gede", dataset_type="file", path=tmp_path / "absent.jsonl")
+
+    with pytest.raises(click.ClickException) as exc_info:
+        _raise_for_unavailable_dataset(spec)
+
+    message = str(exc_info.value)
+    assert "prepare-gede" in message
+    assert "datasets/README.md" in message
+    assert str(tmp_path / "absent.jsonl") in message
+
+
+def test_raise_for_unavailable_dataset_reports_other_datasets_plainly(tmp_path):
+    spec = DatasetSpec(name="mine", dataset_type="file", path=tmp_path / "absent.jsonl")
+
+    with pytest.raises(click.ClickException) as exc_info:
+        _raise_for_unavailable_dataset(spec)
+
+    assert "--register-file-dataset" in str(exc_info.value)

@@ -36,10 +36,10 @@ The infrastructure (pixi, multi-Python CI matrix, bandit, mypy, Docker, Zenodo/R
 is well beyond what internal research code usually carries.
 
 What would actually bite an outside user, in order: the bundled corpus has no licence or
-provenance (**R1**); most of the per-category table reports fabricated numbers (**R2**); three
-CLI flags silently do nothing (**R3**); and `pip install` yields an unimportable package
-(**R11**). Beyond those, the largest structural item is that the public API bakes `Stub` into
-its type names right before real models land (**R24**).
+provenance (**R1**, mostly resolved); most of the per-category table reports fabricated numbers
+(**R2**); three CLI flags silently do nothing (**R3**); and `pip install` yields an unimportable
+package (**R11**). Beyond those, the largest structural item is that the public API bakes `Stub`
+into its type names right before real models land (**R24**).
 
 ---
 
@@ -47,7 +47,7 @@ its type names right before real models land (**R24**).
 
 | ID | Finding | Why it blocks |
 | --- | --- | --- |
-| **R1** | Bundled corpus has no licence, attribution, or provenance | Legal/ethical exposure; not a code fix |
+| **R1** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge and dataset reproduction test still outstanding |
 | **R2** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Publishes numbers that describe nothing, indistinguishable from real ones |
 | **R3** | `--text-key` / `--label-key` / `--category-key` are silently inert | The documented path for using your own data does not work |
 
@@ -59,6 +59,34 @@ clone-and-pixi path.
 ## Blocking findings
 
 ### R1. The bundled corpus ships with no licence, attribution, or provenance — High
+
+**Status: mostly resolved.** The corpus is no longer redistributed. `datasets/gede_essays.json`
+has been deleted, the two `tests/data/` fixtures (which contained the same third-party essay
+text) have been regenerated as synthetic, `datasets/README.md` records provenance, the licence
+chain, and composition, and users now obtain and convert the corpus themselves via
+`pixi run prepare-gede`. This also resolved R12 for the new bundled `demo` dataset. Two items
+remain, recorded under "Remaining" below.
+
+The upstream licence question is now answered rather than open: **the GEDE data is CC BY-NC-SA
+4.0**, stated in the upstream README, and the upstream repository carries no `LICENSE` file of
+its own. Redistribution under this repository's BSD-3 licence was therefore not permissible,
+which is why the strip-and-prepare route was taken rather than seeking permission.
+
+**Remaining:**
+
+* **Purge the blob and the old fixtures from git history.** Deleting them from `HEAD` does not
+  remove them from clones or from GitHub's archive downloads. This is a prerequisite for the
+  repository going public, and needs coordinating with anyone holding a clone.
+* **Verify the converter reproduces the published corpus.** The adapter is tested against a
+  synthetic database carrying upstream's schema, which covers the normalization rules and the
+  label derivation, but it has never been run against the real `database.db`. Do that once, and
+  diff the output against the deleted blob (recoverable from commit `2b2ec6b`) on the sorted
+  `(id, label, contribution_level, dataset, text_author)` tuples; an exact match on all 13,619
+  records is the strongest available evidence the conversion is faithful.
+
+---
+
+The original finding, retained for context:
 
 `datasets/gede_essays.json` is 13,619 records / 32 MB, tracked in git and redistributed under
 the repository's BSD-3 licence. Its own `dataset` field records that it is derived from three
@@ -579,7 +607,8 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 
 ## Suggested order of work
 
-1. **R1** — start the licence review now; it has the longest lead time and nothing else unblocks it.
+1. **R1** — done except purging the corpus from git history, which is a prerequisite for
+   going public and needs coordinating across clones.
 2. **R2**, **R3**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
 3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
 4. **R17** — make the test signal trustworthy before building on it.

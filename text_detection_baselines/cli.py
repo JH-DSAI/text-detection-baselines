@@ -24,6 +24,9 @@ from rich.console import Console
 from rich.table import Table
 
 from .datasets import (
+    GEDE_PREPARE_HINT,
+    DatasetSpec,
+    dataset_available,
     get_dataset_spec,
     get_default_dataset_names,
     list_registered_datasets,
@@ -34,10 +37,51 @@ from .models import build_model, get_default_model_names, list_registered_models
 
 LOGGER = logging.getLogger(__name__)
 
-_REGISTERED_DATASETS = ", ".join(list_registered_datasets())
+
+def _describe_registered_datasets() -> str:
+    """List registered datasets, marking any whose data file is not present."""
+    described = []
+    for name in list_registered_datasets():
+        available = dataset_available(get_dataset_spec(name))
+        described.append(name if available else f"{name} (not prepared)")
+    return ", ".join(described)
+
+
+_REGISTERED_DATASETS = _describe_registered_datasets()
 _DEFAULT_DATASETS = ", ".join(get_default_dataset_names())
 _REGISTERED_MODELS = ", ".join(list_registered_models())
 _DEFAULT_MODELS = ", ".join(get_default_model_names())
+
+
+def _raise_for_unavailable_dataset(spec: DatasetSpec) -> None:
+    """Fail with an actionable message when a dataset's file is missing.
+
+    Without this the failure surfaces from ``read_text`` as a ``FileNotFoundError``
+    naming a path the user never chose, which does not say that the dataset has to
+    be prepared first.
+    """
+    if dataset_available(spec):
+        return
+
+    lines = [
+        f"Dataset '{spec.name}' is registered but its data file is not present:",
+        f"  {spec.path}",
+    ]
+    if spec.name == "gede":
+        lines += [
+            "",
+            "The GEDE corpus is not redistributed with this package. Obtain it from",
+            "the upstream project and convert it with:",
+            f"  {GEDE_PREPARE_HINT}",
+            "",
+            "See datasets/README.md for the acquisition steps and licence terms.",
+        ]
+    else:
+        lines += [
+            "",
+            "Point --register-file-dataset at an existing file, or choose another dataset.",
+        ]
+    raise click.ClickException("\n".join(lines))
 
 
 class NamePathParamType(click.ParamType):
@@ -486,12 +530,17 @@ def main(
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    # Resolved and checked before any model is built: constructing ``smollm2``
+    # downloads weights, which should not happen only to fail on a missing dataset.
+    specs = [get_dataset_spec(name) for name in selected_datasets]
+    for spec in specs:
+        _raise_for_unavailable_dataset(spec)
+
     model_objs = [build_model(name, ood_margin=ood_margin, seed=seed) for name in selected_models]
 
     run_results: list[tuple[str, str, dict, dict]] = []
 
-    for dataset_name in selected_datasets:
-        dataset = get_dataset_spec(dataset_name)
+    for dataset in specs:
         for model in model_objs:
             LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset.name)
             overall, per_cat = evaluate_model_on_dataset(

@@ -171,5 +171,7 @@ test = "pytest --cov=text_detection_baselines --cov-branch --cov-report term --c
 build-docs = "cd docs && make clean html latex epub"
 build-dist = "python -m build"
 main = "python -m text_detection_baselines.cli"
+prepare-gede = "python -m text_detection_baselines.prepare_gede"
+make-demo-dataset = "python tools/make_demo_dataset.py"
 lint = { depends-on = ["check-style", "check-security", "check-types"] }
 ci = { depends-on = ["lint", "test"] }

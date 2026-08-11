@@ -8,17 +8,36 @@ import numpy as np
 import pytest
 
 from text_detection_baselines.datasets import (
+    DATASET_REGISTRY,
+    GEDE_PATH_ENV_VAR,
+    dataset_available,
     get_dataset_spec,
     get_default_dataset_names,
     list_registered_datasets,
     load_dataset,
     register_file_dataset,
+    resolve_gede_path,
 )
 from text_detection_baselines.datasets.file import FileDatasetBatch, load_file_dataset
 
+# Anchored on this file rather than the working directory, so the suite passes
+# regardless of where pytest is invoked from.
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+
+@pytest.fixture
+def clean_registry():
+    """Restore the global dataset registry, so runtime registrations do not leak."""
+    snapshot = dict(DATASET_REGISTRY)
+    try:
+        yield
+    finally:
+        DATASET_REGISTRY.clear()
+        DATASET_REGISTRY.update(snapshot)
+
 
 def test_load_file_dataset_single_doc_fixture():
-    path = Path("tests/data/test_single_doc_per_author.json")
+    path = DATA_DIR / "test_single_doc_per_author.json"
     batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
     assert isinstance(batch, FileDatasetBatch)
     assert len(batch) > 0
@@ -29,14 +48,14 @@ def test_load_file_dataset_single_doc_fixture():
 
 
 def test_load_file_dataset_multi_doc_fixture():
-    path = Path("tests/data/test_multi_docs_per_author.json")
+    path = DATA_DIR / "test_multi_docs_per_author.json"
     batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
     assert len(batch) > 0
     assert len(batch.texts) == len(batch.labels) == len(batch.categories)
 
 
 def test_dataset_dispatch_file_type():
-    path = Path("tests/data/test_single_doc_per_author.json")
+    path = DATA_DIR / "test_single_doc_per_author.json"
     batch = load_dataset(
         dataset_type="file",
         path=path,
@@ -48,7 +67,7 @@ def test_dataset_dispatch_file_type():
 
 
 def test_dataset_dispatch_unknown_type_raises():
-    path = Path("tests/data/test_single_doc_per_author.json")
+    path = DATA_DIR / "test_single_doc_per_author.json"
     with pytest.raises(ValueError, match="Unknown dataset type"):
         load_dataset(
             dataset_type="not-a-type",
@@ -59,15 +78,56 @@ def test_dataset_dispatch_unknown_type_raises():
         )
 
 
-def test_default_dataset_registry_contains_gede():
+def test_default_dataset_is_the_bundled_demo_set():
+    # gede cannot be the default: it is not redistributed and has to be prepared.
     names = list_registered_datasets()
-    assert "gede" in names
-    assert get_default_dataset_names() == ("gede",)
+    assert "demo" in names
+    assert get_default_dataset_names() == ("demo",)
+    spec = get_dataset_spec("DEMO")
+    assert spec.name == "demo"
+
+
+def test_gede_stays_registered_when_not_prepared():
+    # Registration must not depend on the file existing, so the dataset remains
+    # discoverable in --help and selectable by name before it is prepared.
     spec = get_dataset_spec("GEDE")
     assert spec.name == "gede"
+    assert spec.dataset_type == "file"
 
 
-def test_register_file_dataset_runtime(tmp_path):
+def test_dataset_available_reports_missing_and_empty_files(clean_registry, tmp_path):
+    missing = tmp_path / "absent.jsonl"
+    register_file_dataset(name="availability-missing", path=missing)
+    assert not dataset_available(get_dataset_spec("availability-missing"))
+
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    register_file_dataset(name="availability-empty", path=empty)
+    assert not dataset_available(get_dataset_spec("availability-empty"))
+
+    present = tmp_path / "present.jsonl"
+    present.write_text('{"answer":"a","label":"real","contribution_level":"Human"}\n', encoding="utf-8")
+    register_file_dataset(name="availability-present", path=present)
+    assert dataset_available(get_dataset_spec("availability-present"))
+
+
+def test_resolve_gede_path_honours_the_environment_override(monkeypatch, tmp_path):
+    override = tmp_path / "elsewhere" / "gede_essays.jsonl"
+    monkeypatch.setenv(GEDE_PATH_ENV_VAR, str(override))
+    assert resolve_gede_path() == override
+
+
+def test_resolve_gede_path_falls_back_to_the_cache_directory(monkeypatch, tmp_path):
+    monkeypatch.delenv(GEDE_PATH_ENV_VAR, raising=False)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    resolved = resolve_gede_path()
+    # Only asserted when the checkout has no prepared file, which is the state of a
+    # fresh clone and of CI.
+    if not (Path(__file__).resolve().parents[1] / "datasets" / "gede_essays.jsonl").is_file():
+        assert resolved == tmp_path / "text-detection-baselines" / "gede_essays.jsonl"
+
+
+def test_register_file_dataset_runtime(clean_registry, tmp_path):
     path = tmp_path / "runtime.jsonl"
     path.write_text(
         '{"answer":"a","label":"real","contribution_level":"Human"}\n'

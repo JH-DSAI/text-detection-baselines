@@ -24,6 +24,39 @@ To do:
 pixi run main
 ```
 
+The first run resolves a ~800 MB environment, most of it PyTorch.
+
+## Datasets
+
+Two datasets
+are registered; see [datasets/README.md](datasets/README.md) for provenance,
+licences, and citations.
+
+| name | default | what it is |
+| --- | --- | --- |
+| `demo` | yes | 200 records of **synthetic** text bundled inside the package. Both classes are separated by deliberately planted surface statistics, so its numbers describe the pipeline, not detection quality. |
+| `gede` | no | The GEDE corpus of student essays and LLM rewrites. **Licensed CC BY-NC-SA 4.0 and not bundled** — you obtain it from [upstream](https://github.com/lukasgehring/Assessing-LLM-Text-Detection-in-Educational-Contexts) and convert it locally. |
+
+To use `gede`,
+follow the acquisition steps in [datasets/README.md](datasets/README.md), then:
+
+```bash
+pixi run prepare-gede --source /path/to/database.db
+pixi run main -- --dataset gede
+```
+
+Every `gede` figure quoted in the Metrics section below was measured on the full
+published corpus. Three of its properties are load-bearing for reading those
+figures — it is 93.27% machine, it has only 916 human samples, and eight of its nine
+categories are single-label — and all three are documented in
+[datasets/README.md](datasets/README.md).
+
+To evaluate your own file:
+
+```bash
+pixi run main -- --register-file-dataset mydata=/path/to/mydata.jsonl
+```
+
 ## Models
 
 Every model currently registered in [models/](text_detection_baselines/models/) is a **stub**.
