@@ -124,28 +124,7 @@ parameterized metrics, which it currently does not.
 
 ## PR-curve summaries
 
-### 10. Two PR summaries are reported, and they disagree
-
-`average_precision` and `pr_auc` both summarize the same curve.
-`pr_auc` uses trapezoidal integration, which interpolates between operating points
-that are not achievable; scikit-learn documents it as misleading. Observed
-divergence on `gede`:
-
-| model | `average_precision` | `pr_auc` (trapezoidal) |
-| --- | --- | --- |
-| dummy-norm | 0.9327 | 0.9664 |
-| dummy-raw | 0.9300 | 0.9299 |
-| length | 0.9710 | 0.9710 |
-
-The 3.4-point gap on `dummy-norm` arises because that model's scores
-are degenerate (AUROC exactly 0.5), leaving sparse PR points for the trapezoid to
-inflate across.
-
-**Direction:** retire `pr_auc` once `average_precision` is confirmed as the
-reported summary. It was retained only for continuity with earlier numbers, and
-two similarly named columns side by side invite misreading.
-
-### 11. Average precision is not comparable across slices with different prevalence
+### 10. Average precision is not comparable across slices with different prevalence
 
 AP has the positive-class base rate as its floor. `gede` is 93.27% machine
 (12703/13619), which is why every model scores above 0.93 regardless of AUROC.
@@ -161,10 +140,10 @@ prevalence, over 1 minus prevalence) so slices become comparable.
 
 ## Dataset and reporting
 
-### 12. Every `gede` category is single-label, so per-category ranking metrics are all `None`
+### 11. Every `gede` category is single-label, so per-category ranking metrics are all `None`
 
-`auroc`, `auroc_at_1pct`, `average_precision`, and `pr_auc` all require both classes
-present. On `gede`, every `contribution_level` category contains exactly one label:
+`auroc`, `auroc_at_1pct`, and `average_precision` all require both classes present.
+On `gede`, every `contribution_level` category contains exactly one label:
 
 | category | n | n_human | n_machine |
 | --- | --- | --- | --- |
@@ -178,7 +157,7 @@ present. On `gede`, every `contribution_level` category contains exactly one lab
 | Task+Summary | 1776 | 0 | 1776 |
 | task+resource | 40 | 0 | 40 |
 
-So four of the eleven per-category columns are `-` for every row. This is a
+So three of the eleven per-category columns are `-` for every row. This is a
 property of the dataset, not a metric bug, but it makes the per-category table
 substantially less useful than it appears.
 
@@ -187,7 +166,7 @@ score each machine category against the shared human pool (which makes AUROC
 defined and answers "which generation style is hardest to detect"); or suppress
 ranking columns in the per-category table when no category has both labels.
 
-### 13. `task+resource` has 40 samples and is reported with the same precision as categories 45× larger
+### 12. `task+resource` has 40 samples and is reported with the same precision as categories 45× larger
 
 No sample-count floor and no uncertainty estimate, so a 40-sample category renders
 identically to a 1832-sample one.
@@ -195,7 +174,7 @@ identically to a 1832-sample one.
 **Direction:** report bootstrap confidence intervals, or flag categories below a
 minimum size.
 
-### 14. All exported metrics are rounded to 4 decimal places
+### 13. All exported metrics are rounded to 4 decimal places
 
 `run_all_metrics` applies `safe_round(value)` with the default `ndigits=4`, so the
 JSON/YAML/CSV exports are lossy. Fine for reading a table, lossy for paired
@@ -204,7 +183,7 @@ significance testing between two close models.
 **Direction:** keep full precision in the structured exports and round only at the
 console-rendering layer.
 
-### 15. Console table columns are hard-coded positionally
+### 14. Console table columns are hard-coded positionally
 
 The registry is fully dynamic on the producer side, but `render_console_tables`
 ([cli.py](text_detection_baselines/cli.py)) hard-codes each column header and cell
@@ -215,7 +194,7 @@ CSV/JSON/YAML export needs no change, which makes the asymmetry easy to forget.
 **Direction:** give `MetricSpec` a display-name and ordering field and derive the
 table columns from the registry.
 
-### 16. The per-category table overflows an 80-column terminal
+### 15. The per-category table overflows an 80-column terminal
 
 Now at 11 columns (13 for normalized-score models), headers truncate to `AURO…`
 and dataset names to `dat…`.

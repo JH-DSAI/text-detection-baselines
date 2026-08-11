@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 from sklearn.metrics import (  # type: ignore[import-untyped]
-    auc,
     average_precision_score,
-    precision_recall_curve,
     roc_auc_score,
 )
 
@@ -92,12 +90,13 @@ def average_precision_metric(
     target_alpha: float,
     tau: float,
 ) -> float | None:
-    """Average precision on non-OOD samples: the preferred PR summary.
+    """Average precision on non-OOD samples: the PR-curve summary.
 
     Average precision sums ``(R_n - R_{n-1}) * P_n`` over the achievable
-    precision-recall operating points, so unlike :func:`pr_auc_metric` it does
-    not interpolate between them.  This is the estimator scikit-learn recommends
-    for summarizing a PR curve, and the one reported in the console tables.
+    precision-recall operating points rather than interpolating between them, as
+    trapezoidal integration of the curve would.  This is the estimator
+    scikit-learn recommends for summarizing a PR curve, and the one reported in
+    the console tables.
 
     Returns:
         The average precision, or ``None`` when undefined (see
@@ -109,37 +108,6 @@ def average_precision_metric(
         return None
     kept_labels, kept_scores = kept
     return float(average_precision_score(kept_labels, kept_scores))
-
-
-@register_metric("pr_auc")
-def pr_auc_metric(
-    labels: np.ndarray,
-    scores: np.ndarray,
-    ood_flags: np.ndarray,
-    flags: np.ndarray,
-    target_alpha: float,
-    tau: float,
-) -> float | None:
-    """Trapezoidal area under the precision-recall curve, on non-OOD samples.
-
-    Computed as ``auc(recall, precision)``.  Linear interpolation between
-    adjacent PR points describes operating points that are not actually
-    achievable, so scikit-learn documents this estimator as misleading and
-    recommends average precision instead.  It is retained here for continuity
-    with previously reported numbers; prefer
-    :func:`average_precision_metric` for new analysis.
-
-    Returns:
-        The trapezoidal PR-AUC, or ``None`` when undefined (see
-        :func:`_non_ood_binary`).
-    """
-    del flags, target_alpha, tau
-    kept = _non_ood_binary(labels, scores, ood_flags)
-    if kept is None:
-        return None
-    kept_labels, kept_scores = kept
-    precision, recall, _ = precision_recall_curve(kept_labels, kept_scores)
-    return float(auc(recall, precision))
 
 
 @register_metric("fpr_at_tau")

@@ -21,11 +21,10 @@ from text_detection_baselines.metrics.detection import (
     calibration_gap_metric,
     fpr_at_tau_metric,
     ood_percent_metric,
-    pr_auc_metric,
     tpr_at_tau_metric,
 )
 
-_RANKING_METRICS = [auroc_metric, auroc_at_1pct_metric, pr_auc_metric, average_precision_metric]
+_RANKING_METRICS = [auroc_metric, auroc_at_1pct_metric, average_precision_metric]
 
 
 @pytest.fixture
@@ -56,7 +55,6 @@ def test_detection_metrics(metric_inputs):
     labels, scores, ood_flags, flags, target_alpha, tau = metric_inputs
     assert auroc_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
     assert auroc_at_1pct_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
-    assert pr_auc_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
     assert average_precision_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
     assert fpr_at_tau_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 0.0
     assert tpr_at_tau_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 0.5
@@ -71,9 +69,8 @@ def test_ranking_metrics_imperfect_separation(imperfect_metric_inputs):
     assert auroc_at_1pct_metric(labels, scores, ood_flags, flags, target_alpha, tau) == pytest.approx(
         0.748744, abs=1e-6
     )
-    assert pr_auc_metric(labels, scores, ood_flags, flags, target_alpha, tau) == pytest.approx(0.791667, abs=1e-6)
-    # Average precision does not interpolate between operating points, so it
-    # disagrees with the trapezoidal estimate on the same data.
+    # Average precision sums over achievable operating points; it does not
+    # interpolate between them the way a trapezoidal PR-AUC would.
     assert average_precision_metric(labels, scores, ood_flags, flags, target_alpha, tau) == pytest.approx(
         0.833333, abs=1e-6
     )
@@ -112,7 +109,6 @@ def test_metric_registration_defaults_present():
     names = list_registered_metrics()
     assert "auroc" in names
     assert "auroc_at_1pct" in names
-    assert "pr_auc" in names
     assert "average_precision" in names
     assert "fpr_at_tau" in names
     assert "tpr_at_tau" in names

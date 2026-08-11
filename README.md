@@ -52,15 +52,14 @@ machine-generated**, and labels are `0` = human, `1` = machine.
 ### Detection metrics
 
 Defined in [metrics/detection.py](text_detection_baselines/metrics/detection.py).
-All four ranking metrics are computed on **non-OOD samples only** and return `null`
+All three ranking metrics are computed on **non-OOD samples only** and return `null`
 when that subset is empty or contains just one class.
 
 | Registry key | Table | Description |
 | --- | --- | --- |
 | `auroc` | AUROC | Area under the ROC curve. |
 | `auroc_at_1pct` | AUROC@1% | Partial AUROC over the FPR ≤ 1% region — the regime a deployed detector actually operates in. See the note on its scaling below. |
-| `average_precision` | AP | Average precision. The preferred precision-recall summary. |
-| `pr_auc` | — | Trapezoidal area under the PR curve. Retained for continuity; prefer `average_precision`. Exported but not shown in the console. |
+| `average_precision` | AP | Average precision — the precision-recall summary. Sums over achievable operating points rather than interpolating between them, as trapezoidal PR-AUC would. |
 | `fpr_at_tau` | FPR@tau | False positive rate at the learned threshold, among human samples. |
 | `tpr_at_tau` | TPR@tau | True positive rate at the learned threshold, among machine samples. |
 | `calibration_gap` | CalGap | `abs(fpr_at_tau - target_alpha)`, i.e. how far threshold learning missed its FPR budget. |
@@ -116,17 +115,19 @@ deliberately diverges from the researchers' implementation:
   low-FPR region scores below 0.5 (`dummy-raw` scores 0.4976 on `gede`).
 
 * **Ranking metrics exclude OOD-flagged samples; the abstention curve does not.**
-  `auroc`, `auroc_at_1pct`, `average_precision`, and `pr_auc` all restrict to
-  `~ood_flags`, so they will not reproduce values computed over the whole
-  population. `compute_abstention_curve` currently takes no `ood_flags` argument
-  and so is a whole-population measure — its AUROC is not comparable to `auroc`
-  from the same run.
+  `auroc`, `auroc_at_1pct`, and `average_precision` all restrict to `~ood_flags`,
+  so they will not reproduce values computed over the whole population.
+  `compute_abstention_curve` currently takes no `ood_flags` argument and so is a
+  whole-population measure — its AUROC is not comparable to `auroc` from the same
+  run.
 
-* **`average_precision` and `pr_auc` disagree, sometimes materially.** Trapezoidal
-  integration interpolates between operating points that cannot be achieved;
-  scikit-learn documents it as misleading. Both are exported so the two can be
-  compared, but only AP is shown in the console. The gap reaches 3.4 points on
-  `dummy-norm`.
+* **`average_precision` is the only PR summary reported.** A trapezoidal PR-AUC
+  was previously exported alongside it and has been removed: linear interpolation
+  between adjacent PR points describes operating points that cannot be achieved,
+  and scikit-learn documents that estimator as misleading. It disagreed with AP by
+  up to 3.4 points on `dummy-norm`, whose degenerate scores leave sparse PR points
+  for the trapezoid to inflate across. Earlier numbers reported under a `pr_auc`
+  column are not comparable to `average_precision`.
 
 * **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
   so every model scores AP above 0.93 regardless of ranking quality.
@@ -151,7 +152,7 @@ deliberately diverges from the researchers' implementation:
 
 * **Per-category ranking metrics are `null` on `gede`.** Every
   `contribution_level` category in that dataset contains exactly one label, so all
-  four ranking metrics are undefined for every category row.
+  three ranking metrics are undefined for every category row.
 
 ## Common commands
 

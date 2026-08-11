@@ -131,7 +131,6 @@ def test_evaluate_predictions_overall_keys():
     for key in (
         "auroc",
         "auroc_at_1pct",
-        "pr_auc",
         "average_precision",
         "fpr_at_tau",
         "tpr_at_tau",
@@ -154,7 +153,7 @@ def test_evaluate_predictions_per_category_keys():
         for key in (
             "auroc",
             "auroc_at_1pct",
-            "pr_auc",
+            "average_precision",
             "fpr_at_tau",
             "tpr_at_tau",
             "calibration_gap",
@@ -207,7 +206,7 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
     for key in (
         "auroc",
         "auroc_at_1pct",
-        "pr_auc",
+        "average_precision",
         "fpr_at_tau",
         "tpr_at_tau",
         "calibration_gap",
@@ -221,7 +220,7 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
     for cat_metrics in per_cat.values():
         for key in (
             "auroc_at_1pct",
-            "pr_auc",
+            "average_precision",
             "fpr_at_tau",
             "tpr_at_tau",
             "calibration_gap",

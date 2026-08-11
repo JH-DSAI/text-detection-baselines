@@ -6,7 +6,6 @@ Metrics computed per (dataset, model) pair
 - AUROC     (on non-OOD samples)
 - AUROC@1%  standardized partial AUROC over the FPR <= 1% regime (non-OOD samples)
 - AP        average precision, the non-interpolated PR summary (non-OOD samples)
-- PR-AUC    trapezoidal area under the precision-recall curve; prefer AP
 - FPR@tau   false positive rate at the learned threshold
 - TPR@tau   true positive rate at the learned threshold
 - CalGap    |FPR@tau - target_alpha|

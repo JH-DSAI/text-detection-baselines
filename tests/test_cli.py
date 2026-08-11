@@ -276,7 +276,6 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                 "m1": {
                     "auroc": 0.91,
                     "auroc_at_1pct": 0.87,
-                    "pr_auc": 0.93,
                     "average_precision": 0.93,
                     "fpr_at_tau": 0.1,
                     "tpr_at_tau": 0.9,
@@ -290,7 +289,6 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                 "m2": {
                     "auroc": 0.75,
                     "auroc_at_1pct": None,
-                    "pr_auc": 0.81,
                     "average_precision": 0.81,
                     "fpr_at_tau": 0.2,
                     "tpr_at_tau": 0.7,
@@ -304,7 +302,6 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                 "m1": {
                     "auroc": 0.88,
                     "auroc_at_1pct": 0.84,
-                    "pr_auc": 0.9,
                     "average_precision": 0.9,
                     "fpr_at_tau": 0.12,
                     "tpr_at_tau": 0.86,
@@ -323,7 +320,6 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                     "m1": {
                         "auroc": 0.92,
                         "auroc_at_1pct": 0.89,
-                        "pr_auc": 0.94,
                         "average_precision": 0.94,
                         "fpr_at_tau": 0.09,
                         "tpr_at_tau": 0.9,
@@ -337,7 +333,6 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                     "m2": {
                         "auroc": 0.74,
                         "auroc_at_1pct": 0.7,
-                        "pr_auc": 0.8,
                         "average_precision": 0.8,
                         "fpr_at_tau": 0.21,
                         "tpr_at_tau": 0.68,
@@ -351,7 +346,6 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                     "m1": {
                         "auroc": 0.9,
                         "auroc_at_1pct": 0.86,
-                        "pr_auc": 0.92,
                         "average_precision": 0.92,
                         "fpr_at_tau": 0.1,
                         "tpr_at_tau": 0.89,
