@@ -376,30 +376,30 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
     assert summary_by_key[("ds1", "m1")] == {
         "dataset": "ds1",
         "model": "m1",
-        "AUROC": "0.9100",
-        "AUROC@1%": "0.8700",
-        "AP": "0.9300",
-        "FPR@tau": "0.1000",
-        "TPR@tau": "0.9000",
-        "CalGap": "0.0200",
-        "OOD%": "0.0300",
-        "tau": "0.5000",
+        "AUROC": "0.910",
+        "AUROC@1%": "0.870",
+        "AP": "0.930",
+        "FPR@tau": "0.100",
+        "TPR@tau": "0.900",
+        "CalGap": "0.020",
+        "OOD%": "0.030",
+        "tau": "0.500",
     }
     # A model that reports no partial AUROC renders as a placeholder, not a crash.
-    assert summary_by_key[("ds1", "m2")]["AUROC"] == "0.7500"
+    assert summary_by_key[("ds1", "m2")]["AUROC"] == "0.750"
     assert summary_by_key[("ds1", "m2")]["AUROC@1%"] == "-"
-    assert summary_by_key[("ds1", "m2")]["AP"] == "0.8100"
-    assert summary_by_key[("ds2", "m1")]["AUROC"] == "0.8800"
-    assert summary_by_key[("ds2", "m1")]["tau"] == "0.5200"
+    assert summary_by_key[("ds1", "m2")]["AP"] == "0.810"
+    assert summary_by_key[("ds2", "m1")]["AUROC"] == "0.880"
+    assert summary_by_key[("ds2", "m1")]["tau"] == "0.520"
 
     # Calibration table has only normalized model rows.
     assert len(calibration_rows) == 2
     calibration_by_key = {(row["dataset"], row["model"]): row for row in calibration_rows}
     assert set(calibration_by_key) == {("ds1", "m1"), ("ds2", "m1")}
-    assert calibration_by_key[("ds1", "m1")]["Brier"] == "0.1200"
-    assert calibration_by_key[("ds1", "m1")]["ECE"] == "0.0800"
-    assert calibration_by_key[("ds2", "m1")]["Brier"] == "0.1400"
-    assert calibration_by_key[("ds2", "m1")]["ECE"] == "0.0900"
+    assert calibration_by_key[("ds1", "m1")]["Brier"] == "0.120"
+    assert calibration_by_key[("ds1", "m1")]["ECE"] == "0.080"
+    assert calibration_by_key[("ds2", "m1")]["Brier"] == "0.140"
+    assert calibration_by_key[("ds2", "m1")]["ECE"] == "0.090"
 
     # One row per (dataset, category, model).
     assert len(per_category_rows) == 3
@@ -407,16 +407,16 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
         "dataset": "ds1",
         "model": "m1",
         "category": "catA",
-        "AUROC": "0.9200",
-        "AUROC@1%": "0.8900",
-        "AP": "0.9400",
-        "FPR@tau": "0.0900",
-        "TPR@tau": "0.9000",
-        "CalGap": "0.0300",
-        "OOD%": "0.0200",
+        "AUROC": "0.920",
+        "AUROC@1%": "0.890",
+        "AP": "0.940",
+        "FPR@tau": "0.090",
+        "TPR@tau": "0.900",
+        "CalGap": "0.030",
+        "OOD%": "0.020",
         "n": "10",
-        "Brier": "0.1100",
-        "ECE": "0.0700",
+        "Brier": "0.110",
+        "ECE": "0.070",
     }
 
 
