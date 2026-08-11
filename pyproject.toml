@@ -167,23 +167,32 @@ platforms = [
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
-docs = { features = ["dev", "docs"], solve-group = "default" }
-dist = { features = ["dev"], solve-group = "default" }
 test-py311 = { features = ["dev", "py311"], solve-group = "test-py311" }
 test-py312 = { features = ["dev", "py312"], solve-group = "test-py312" }
 test-py313 = { features = ["dev", "py313"], solve-group = "test-py313" }
 test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
 cuda = { features = ["cuda"] }
 
+[tool.pixi.environments.dist]
+features = ["dev"]
+solve-group = "default"
+tasks = { build-dist = "python -m build" }
+
+[tool.pixi.environments.docs]
+features = ["dev", "docs"]
+solve-group = "default"
+tasks = { build-docs = "cd docs && make clean html latex epub" }
+
 [tool.pixi.tasks]
+main = "python -m text_detection_baselines.cli"
+
+[tool.pixi.feature.dev.tasks]
 check-style = "ruff format --check . && ruff check ."
 check-security = "bandit -c pyproject.toml --severity-level=medium -r text_detection_baselines"
 check-types = "mypy"
 format = "ruff format . && ruff check --select I --fix ."
 fix = "ruff check --fix ."
 test = "pytest --cov=text_detection_baselines --cov-branch --cov-report term --cov-report=xml --cov-report=json --cov-report=term-missing"
-build-docs = "cd docs && make clean html latex epub"
-build-dist = "python -m build"
-main = "python -m text_detection_baselines.cli"
 lint = { depends-on = ["check-style", "check-security", "check-types"] }
 ci = { depends-on = ["lint", "test"] }
+
