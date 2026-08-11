@@ -127,7 +127,7 @@ def _fmt(value: Any) -> str:
     if value is None:
         return "-"
     if isinstance(value, float):
-        return f"{value:.4f}"
+        return f"{value:.3f}"
     return str(value)
 
 
