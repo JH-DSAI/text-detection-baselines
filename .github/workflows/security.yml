@@ -19,6 +19,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
+          pixi-version: v0.74.0
           environments: dev
           cache: true
       - name: Run bandit

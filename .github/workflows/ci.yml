@@ -23,6 +23,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
+          pixi-version: v0.74.0
           environments: dev
           cache: true
       - name: Lint
@@ -52,6 +53,7 @@ jobs:
     - name: Set up pixi
       uses: prefix-dev/setup-pixi@v0.8.14
       with:
+        pixi-version: v0.74.0
         environments: test-py${{ env.PYTHON_ALT }}
         cache: true
     - name: Test with pixi (pytest)
@@ -83,6 +85,7 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
+          pixi-version: v0.74.0
           environments: docs
           cache: true
       - name: Build sphinx docs.
