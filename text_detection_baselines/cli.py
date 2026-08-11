@@ -145,7 +145,7 @@ def render_console_tables(tree: dict[str, Any]) -> None:
     # ── Overall metrics ──────────────────────────────────────────────
     overall_rows = _flatten_overall(tree)
     summary = Table(title="Text Detection Metrics", show_lines=False)
-    for col in ("dataset", "model", "AUROC", "FPR@tau", "TPR@tau", "CalGap", "OOD%", "tau"):
+    for col in ("dataset", "model", "AUROC", "AUROC@1%", "AP", "FPR@tau", "TPR@tau", "CalGap", "OOD%", "tau"):
         summary.add_column(col, justify="left" if col in {"dataset", "model"} else "right")
 
     for row in sorted(overall_rows, key=lambda r: (r["dataset"], r["model"])):
@@ -153,6 +153,8 @@ def render_console_tables(tree: dict[str, Any]) -> None:
             row["dataset"],
             row["model"],
             _fmt(row.get("auroc")),
+            _fmt(row.get("auroc_at_1pct")),
+            _fmt(row.get("average_precision")),
             _fmt(row.get("fpr_at_tau")),
             _fmt(row.get("tpr_at_tau")),
             _fmt(row.get("calibration_gap")),
@@ -176,7 +178,19 @@ def render_console_tables(tree: dict[str, Any]) -> None:
     per_cat_rows = _flatten_per_category(tree)
 
     has_normalized = any(r.get("normalized_scores") for r in per_cat_rows)
-    cat_cols = ["dataset", "model", "category", "AUROC", "FPR@tau", "TPR@tau", "CalGap", "OOD%", "n"]
+    cat_cols = [
+        "dataset",
+        "model",
+        "category",
+        "AUROC",
+        "AUROC@1%",
+        "AP",
+        "FPR@tau",
+        "TPR@tau",
+        "CalGap",
+        "OOD%",
+        "n",
+    ]
     if has_normalized:
         cat_cols += ["Brier", "ECE"]
 
@@ -190,6 +204,8 @@ def render_console_tables(tree: dict[str, Any]) -> None:
             row["model"],
             row["category"],
             _fmt(row.get("auroc")),
+            _fmt(row.get("auroc_at_1pct")),
+            _fmt(row.get("average_precision")),
             _fmt(row.get("fpr_at_tau")),
             _fmt(row.get("tpr_at_tau")),
             _fmt(row.get("calibration_gap")),

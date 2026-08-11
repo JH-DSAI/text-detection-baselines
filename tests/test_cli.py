@@ -248,6 +248,16 @@ def _table_rows(table):
     return list(zip(*[col._cells for col in table.columns], strict=False))
 
 
+def _rows_by_header(table):
+    """Map each rendered row to {column header: cell}.
+
+    Keyed on headers rather than position so that adding a metric column does not
+    invalidate assertions about unrelated columns.
+    """
+    headers = [col.header for col in table.columns]
+    return [dict(zip(headers, cells, strict=True)) for cells in _table_rows(table)]
+
+
 def test_render_console_tables_structure_and_metrics(monkeypatch):
     captured = []
 
@@ -265,6 +275,9 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
             "ds1": {
                 "m1": {
                     "auroc": 0.91,
+                    "auroc_at_1pct": 0.87,
+                    "pr_auc": 0.93,
+                    "average_precision": 0.93,
                     "fpr_at_tau": 0.1,
                     "tpr_at_tau": 0.9,
                     "calibration_gap": 0.02,
@@ -276,6 +289,9 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                 },
                 "m2": {
                     "auroc": 0.75,
+                    "auroc_at_1pct": None,
+                    "pr_auc": 0.81,
+                    "average_precision": 0.81,
                     "fpr_at_tau": 0.2,
                     "tpr_at_tau": 0.7,
                     "calibration_gap": 0.05,
@@ -287,6 +303,9 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
             "ds2": {
                 "m1": {
                     "auroc": 0.88,
+                    "auroc_at_1pct": 0.84,
+                    "pr_auc": 0.9,
+                    "average_precision": 0.9,
                     "fpr_at_tau": 0.12,
                     "tpr_at_tau": 0.86,
                     "calibration_gap": 0.03,
@@ -303,6 +322,9 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                 "catA": {
                     "m1": {
                         "auroc": 0.92,
+                        "auroc_at_1pct": 0.89,
+                        "pr_auc": 0.94,
+                        "average_precision": 0.94,
                         "fpr_at_tau": 0.09,
                         "tpr_at_tau": 0.9,
                         "calibration_gap": 0.03,
@@ -314,6 +336,9 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                     },
                     "m2": {
                         "auroc": 0.74,
+                        "auroc_at_1pct": 0.7,
+                        "pr_auc": 0.8,
+                        "average_precision": 0.8,
                         "fpr_at_tau": 0.21,
                         "tpr_at_tau": 0.68,
                         "calibration_gap": 0.06,
@@ -325,6 +350,9 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
                 "catB": {
                     "m1": {
                         "auroc": 0.9,
+                        "auroc_at_1pct": 0.86,
+                        "pr_auc": 0.92,
+                        "average_precision": 0.92,
                         "fpr_at_tau": 0.1,
                         "tpr_at_tau": 0.89,
                         "calibration_gap": 0.03,
@@ -342,36 +370,60 @@ def test_render_console_tables_structure_and_metrics(monkeypatch):
     render_console_tables(tree)
 
     assert len(captured) == 3
-    summary_rows = _table_rows(captured[0])
-    calibration_rows = _table_rows(captured[1])
-    per_category_rows = _table_rows(captured[2])
+    summary_rows = _rows_by_header(captured[0])
+    calibration_rows = _rows_by_header(captured[1])
+    per_category_rows = _rows_by_header(captured[2])
 
     # One row per (dataset, model) overall.
     assert len(summary_rows) == 3
-    assert ("ds1", "m1", "0.9100", "0.1000", "0.9000", "0.0200", "0.0300", "0.5000") in summary_rows
-    assert ("ds1", "m2", "0.7500", "0.2000", "0.7000", "0.0500", "0.0600", "0.4500") in summary_rows
-    assert ("ds2", "m1", "0.8800", "0.1200", "0.8600", "0.0300", "0.0400", "0.5200") in summary_rows
+    summary_by_key = {(row["dataset"], row["model"]): row for row in summary_rows}
+    assert set(summary_by_key) == {("ds1", "m1"), ("ds1", "m2"), ("ds2", "m1")}
+
+    assert summary_by_key[("ds1", "m1")] == {
+        "dataset": "ds1",
+        "model": "m1",
+        "AUROC": "0.9100",
+        "AUROC@1%": "0.8700",
+        "AP": "0.9300",
+        "FPR@tau": "0.1000",
+        "TPR@tau": "0.9000",
+        "CalGap": "0.0200",
+        "OOD%": "0.0300",
+        "tau": "0.5000",
+    }
+    # A model that reports no partial AUROC renders as a placeholder, not a crash.
+    assert summary_by_key[("ds1", "m2")]["AUROC"] == "0.7500"
+    assert summary_by_key[("ds1", "m2")]["AUROC@1%"] == "-"
+    assert summary_by_key[("ds1", "m2")]["AP"] == "0.8100"
+    assert summary_by_key[("ds2", "m1")]["AUROC"] == "0.8800"
+    assert summary_by_key[("ds2", "m1")]["tau"] == "0.5200"
 
     # Calibration table has only normalized model rows.
     assert len(calibration_rows) == 2
-    assert ("ds1", "m1", "0.1200", "0.0800") in calibration_rows
-    assert ("ds2", "m1", "0.1400", "0.0900") in calibration_rows
+    calibration_by_key = {(row["dataset"], row["model"]): row for row in calibration_rows}
+    assert set(calibration_by_key) == {("ds1", "m1"), ("ds2", "m1")}
+    assert calibration_by_key[("ds1", "m1")]["Brier"] == "0.1200"
+    assert calibration_by_key[("ds1", "m1")]["ECE"] == "0.0800"
+    assert calibration_by_key[("ds2", "m1")]["Brier"] == "0.1400"
+    assert calibration_by_key[("ds2", "m1")]["ECE"] == "0.0900"
 
     # One row per (dataset, category, model).
     assert len(per_category_rows) == 3
-    assert (
-        "ds1",
-        "m1",
-        "catA",
-        "0.9200",
-        "0.0900",
-        "0.9000",
-        "0.0300",
-        "0.0200",
-        "10",
-        "0.1100",
-        "0.0700",
-    ) in per_category_rows
+    assert per_category_rows[0] == {
+        "dataset": "ds1",
+        "model": "m1",
+        "category": "catA",
+        "AUROC": "0.9200",
+        "AUROC@1%": "0.8900",
+        "AP": "0.9400",
+        "FPR@tau": "0.0900",
+        "TPR@tau": "0.9000",
+        "CalGap": "0.0300",
+        "OOD%": "0.0200",
+        "n": "10",
+        "Brier": "0.1100",
+        "ECE": "0.0700",
+    }
 
 
 def test_raise_for_unknown_names_accepts_known_names_case_insensitive():

@@ -128,7 +128,19 @@ def test_evaluate_predictions_overall_keys():
     categories = np.array(["Human", "Human", "Summary", "Task"])
     output = _make_output([0.2, 0.3, 0.7, 0.8])
     overall, per_cat = evaluate_predictions(labels, categories, output, target_alpha=0.05, normalized_scores=True)
-    for key in ("auroc", "fpr_at_tau", "tpr_at_tau", "calibration_gap", "ood_percent", "tau", "brier", "ece"):
+    for key in (
+        "auroc",
+        "auroc_at_1pct",
+        "pr_auc",
+        "average_precision",
+        "fpr_at_tau",
+        "tpr_at_tau",
+        "calibration_gap",
+        "ood_percent",
+        "tau",
+        "brier",
+        "ece",
+    ):
         assert key in overall, f"missing key: {key}"
 
 
@@ -139,7 +151,17 @@ def test_evaluate_predictions_per_category_keys():
     _, per_cat = evaluate_predictions(labels, categories, output, target_alpha=0.05, normalized_scores=True)
     assert set(per_cat.keys()) == {"Human", "Summary", "Task"}
     for cat_metrics in per_cat.values():
-        for key in ("auroc", "fpr_at_tau", "tpr_at_tau", "calibration_gap", "ood_percent", "brier", "ece"):
+        for key in (
+            "auroc",
+            "auroc_at_1pct",
+            "pr_auc",
+            "fpr_at_tau",
+            "tpr_at_tau",
+            "calibration_gap",
+            "ood_percent",
+            "brier",
+            "ece",
+        ):
             assert key in cat_metrics, f"missing per-category key: {key}"
 
 
@@ -182,12 +204,31 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
         category_key="contribution_level",
     )
 
-    for key in ("auroc", "fpr_at_tau", "tpr_at_tau", "calibration_gap", "ood_percent", "brier", "ece"):
+    for key in (
+        "auroc",
+        "auroc_at_1pct",
+        "pr_auc",
+        "fpr_at_tau",
+        "tpr_at_tau",
+        "calibration_gap",
+        "ood_percent",
+        "brier",
+        "ece",
+    ):
         assert key in overall
 
     assert set(per_cat.keys()) == {"Human", "Summary", "Task"}
     for cat_metrics in per_cat.values():
-        for key in ("fpr_at_tau", "tpr_at_tau", "calibration_gap", "ood_percent", "brier", "ece"):
+        for key in (
+            "auroc_at_1pct",
+            "pr_auc",
+            "fpr_at_tau",
+            "tpr_at_tau",
+            "calibration_gap",
+            "ood_percent",
+            "brier",
+            "ece",
+        ):
             assert key in cat_metrics
 
 

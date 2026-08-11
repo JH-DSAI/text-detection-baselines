@@ -84,3 +84,6 @@ def list_registered_metrics() -> list[str]:
 # Import side effects register default metrics.
 from . import calibration as _calibration  # noqa: E402,F401
 from . import detection as _detection  # noqa: E402,F401
+
+# Curve-valued metrics are not registered; re-exported here for convenience.
+from .selective import compute_abstention_curve  # noqa: E402,F401
