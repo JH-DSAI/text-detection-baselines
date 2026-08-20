@@ -24,6 +24,9 @@ from rich.console import Console
 from rich.table import Table
 
 from .datasets import (
+    DEFAULT_CATEGORY_KEY,
+    DEFAULT_LABEL_KEY,
+    DEFAULT_TEXT_KEY,
     GEDE_PREPARE_HINT,
     DatasetSpec,
     dataset_available,
@@ -426,14 +429,36 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     multiple=True,
     help="Write structured output files in selected format(s).",
 )
-@click.option("--text-key", type=str, default="answer", show_default=True, help="Dataset field containing the text.")
-@click.option("--label-key", type=str, default="label", show_default=True, help="Dataset field containing the label.")
+@click.option(
+    "--text-key",
+    type=str,
+    default=DEFAULT_TEXT_KEY,
+    show_default=True,
+    help=(
+        "Field name for text in datasets registered via --register-file-dataset. "
+        "Applies to every such entry in the run; built-in datasets keep their own schema."
+    ),
+)
+@click.option(
+    "--label-key",
+    type=str,
+    default=DEFAULT_LABEL_KEY,
+    show_default=True,
+    help=(
+        "Field name for the label in datasets registered via --register-file-dataset. "
+        "Applies to every such entry in the run; built-in datasets keep their own schema."
+    ),
+)
 @click.option(
     "--category-key",
     type=str,
-    default="contribution_level",
+    default=DEFAULT_CATEGORY_KEY,
     show_default=True,
-    help="Dataset field used for per-category grouping.",
+    help=(
+        "Field name for per-category grouping in datasets registered via "
+        "--register-file-dataset. Applies to every such entry in the run; built-in "
+        "datasets keep their own schema."
+    ),
 )
 @click.option("--seed", type=int, default=7, show_default=True, help="Random seed for model stubs.")
 @click.option(
@@ -470,7 +495,13 @@ def main(
 
     runtime_dataset_names: list[str] = []
     for name, dataset_path in runtime_file_datasets:
-        register_file_dataset(name=name, path=dataset_path)
+        register_file_dataset(
+            name=name,
+            path=dataset_path,
+            text_key=text_key,
+            label_key=label_key,
+            category_key=category_key,
+        )
         runtime_dataset_names.append(name)
 
     registered_datasets = tuple(list_registered_datasets())
@@ -547,9 +578,9 @@ def main(
                 dataset_path=dataset.path,
                 model=model,
                 target_alpha=target_alpha,
-                text_key=dataset.text_key or text_key,
-                label_key=dataset.label_key or label_key,
-                category_key=dataset.category_key or category_key,
+                text_key=dataset.text_key,
+                label_key=dataset.label_key,
+                category_key=dataset.category_key,
             )
             run_results.append((dataset.name, model.model_name, overall, per_cat))
 

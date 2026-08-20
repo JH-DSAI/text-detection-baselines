@@ -37,8 +37,8 @@ is well beyond what internal research code usually carries.
 
 What would actually bite an outside user, in order: the bundled corpus has no licence or
 provenance (**R1**, mostly resolved); most of the per-category table reports fabricated numbers
-(**R2**); three CLI flags silently do nothing (**R3**); and `pip install` yields an unimportable
-package (**R11**). Beyond those, the largest structural item is that the public API bakes `Stub`
+(**R2**); three CLI flags silently did nothing (**R3**, resolved); and `pip install` yields an
+unimportable package (**R11**). Beyond those, the largest structural item is that the public API bakes `Stub`
 into its type names right before real models land (**R31**).
 
 ---
@@ -49,7 +49,7 @@ into its type names right before real models land (**R31**).
 | --- | --- | --- |
 | **R1** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge and dataset reproduction test still outstanding |
 | **R2** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Publishes numbers that describe nothing, indistinguishable from real ones |
-| **R3** | `--text-key` / `--label-key` / `--category-key` are silently inert | The documented path for using your own data does not work |
+| **R3** | `--text-key` / `--label-key` / `--category-key` are silently inert | Resolved: the flags now feed runtime registration, so the documented path for using your own data works |
 
 R11 (broken `pip install`) is a blocker for PyPI specifically, not for the currently supported
 clone-and-pixi path.
@@ -145,6 +145,18 @@ to the same question. Add a regression test asserting `None` for both single-lab
 
 ### R3. `--text-key`, `--label-key`, and `--category-key` are silently inert — High
 
+**Status: resolved.** The three key literals now live as `DEFAULT_TEXT_KEY`, `DEFAULT_LABEL_KEY`,
+and `DEFAULT_CATEGORY_KEY` in
+[datasets/__init__.py](text_detection_baselines/datasets/__init__.py) and are the single source
+of the `DatasetSpec` field defaults, `register_file_dataset`'s keyword defaults, and the three
+`click.option` defaults. The flags are passed into `register_file_dataset` for every
+`--register-file-dataset` entry, the `or` fallback in the evaluation loop is gone in favour of
+`text_key=dataset.text_key`, and the help text now says the flags describe runtime-registered
+files. `DatasetSpec`'s fields stayed required `str`. Two smoke tests cover it: a runtime dataset
+whose text field is `text` loads under `--text-key text`, and `demo` still loads from `answer` in
+the same run. The diagnosis and reasoning below are kept as the record of why the fix took this
+shape; its line references point at the pre-fix code.
+
 [cli.py:501-503](text_detection_baselines/cli.py#L501-L503) resolves each key as
 `dataset.text_key or text_key`. But `DatasetSpec` defaults those fields to non-empty strings
 ([datasets/__init__.py:22-24](text_detection_baselines/datasets/__init__.py#L22-L24)), so the
@@ -163,7 +175,7 @@ not the reason, for a flag that was accepted without complaint. That message is 
 (**R16**), because it will stay the observable symptom of any key mismatch after this one is
 fixed.
 
-**Direction:** keep all three `DatasetSpec` fields as required `str` and make the CLI flags feed
+**Direction (implemented):** keep all three `DatasetSpec` fields as required `str` and make the CLI flags feed
 *registration* rather than evaluation. Evaluation cannot proceed without the keys, so every
 registered dataset should carry a usable triple by construction; widening the fields to
 `str | None` would relocate that guarantee into every consumer instead of resolving it. The `or`
@@ -671,8 +683,9 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 
 1. **R1** — done except purging the corpus from git history, which is a prerequisite for
    going public and needs coordinating across clones.
-2. **R2**, **R3**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
-   **R16** rides along with R3: it is the message a user actually sees when the keys are wrong.
+2. **R2**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
+   **R3** is done; **R16** was to ride along with it and still stands on its own: it is the
+   message a user actually sees when the keys are wrong.
 3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
 4. **R17** — make the test signal trustworthy before building on it.
 5. **R11**, **R12**, **R13**, **R14** — the PyPI gate, as one batch when a release is in view.

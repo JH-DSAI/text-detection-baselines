@@ -12,17 +12,30 @@ from .file import FileDatasetBatch, load_file_dataset
 DatasetLoader = Callable[[Path, str, str, str], FileDatasetBatch]
 DATASET_LOADERS: dict[str, DatasetLoader] = {"file": load_file_dataset}
 
+#: Record field names of the GEDE schema, which the bundled datasets follow.
+#: Single source of truth for the :class:`DatasetSpec` defaults, the
+#: :func:`register_file_dataset` defaults, and the CLI ``--*-key`` defaults.
+DEFAULT_TEXT_KEY = "answer"
+DEFAULT_LABEL_KEY = "label"
+DEFAULT_CATEGORY_KEY = "contribution_level"
+
 
 @dataclass(frozen=True)
 class DatasetSpec:
-    """Configuration for one named dataset instance."""
+    """Configuration for one named dataset instance.
+
+    The three key fields are required for evaluation, so they are plain ``str``
+    with schema defaults rather than optionals: every registered spec carries a
+    usable triple by construction, and consumers never re-decide what a missing
+    key would mean.
+    """
 
     name: str
     dataset_type: str
     path: Path
-    text_key: str = "answer"
-    label_key: str = "label"
-    category_key: str = "contribution_level"
+    text_key: str = DEFAULT_TEXT_KEY
+    label_key: str = DEFAULT_LABEL_KEY
+    category_key: str = DEFAULT_CATEGORY_KEY
 
 
 DATASET_REGISTRY: dict[str, DatasetSpec] = {}
@@ -48,9 +61,9 @@ def register_file_dataset(
     *,
     name: str,
     path: Path,
-    text_key: str = "answer",
-    label_key: str = "label",
-    category_key: str = "contribution_level",
+    text_key: str = DEFAULT_TEXT_KEY,
+    label_key: str = DEFAULT_LABEL_KEY,
+    category_key: str = DEFAULT_CATEGORY_KEY,
 ) -> None:
     """Register a file-backed dataset instance."""
     register_dataset(
@@ -198,6 +211,9 @@ register_file_dataset(name="gede", path=resolve_gede_path())
 __all__ = [
     "DATASET_LOADERS",
     "DATASET_REGISTRY",
+    "DEFAULT_CATEGORY_KEY",
+    "DEFAULT_LABEL_KEY",
+    "DEFAULT_TEXT_KEY",
     "GEDE_FILENAME",
     "GEDE_PATH_ENV_VAR",
     "GEDE_PREPARE_HINT",
