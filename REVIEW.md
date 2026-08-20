@@ -172,7 +172,7 @@ The user-visible consequence: a researcher points the tool at their own JSON who
 is `"text"` rather than `"answer"`, passes `--text-key text`, and gets
 `ValueError: No valid samples with required keys in <path>` — an error that names the file but
 not the reason, for a flag that was accepted without complaint. That message is its own finding
-(**R16**), because it will stay the observable symptom of any key mismatch after this one is
+(**R39**), because it will stay the observable symptom of any key mismatch after this one is
 fixed.
 
 **Direction (implemented):** keep all three `DatasetSpec` fields as required `str` and make the CLI flags feed
@@ -242,7 +242,7 @@ that would be caught anyway.
 **Direction:** count skipped rows and log at WARNING with the count and the first few offending
 indices. Consider a `--strict` flag that makes any skip fatal.
 
-### R16. The "no valid samples" error names the file but not the reason — Medium
+### R39. The "no valid samples" error names the file but not the reason — Medium
 
 When the key check at [datasets/file.py:78](text_detection_baselines/datasets/file.py#L78) skips
 every record, [file.py:84-85](text_detection_baselines/datasets/file.py#L84-L85) raises
@@ -404,7 +404,27 @@ paths can diverge without anything failing.
 development source of truth is the smaller change; then the extras exist only for RTD and should
 say so in a comment.
 
----
+### R16. `.coveragerc` silently excludes every `__init__.py` — Medium
+
+**Status: resolved.** `omit = **/_*.py` ([.coveragerc](.coveragerc)) matches `__init__.py`. Confirmed against the
+current `coverage.json`, whose file list contains none of them:
+
+```
+text_detection_baselines/cli.py, datasets/file.py, evaluate.py, util.py,
+metrics/{calibration,detection,selective}.py, models/{base,length_heuristic,prompting_smol,torch_linear}.py
+```
+
+The omitted files are exactly where the extension points live — `build_model` and
+`register_model` in `models/__init__.py`, `run_all_metrics`, `register_metric`, and
+`normalize_metric_value` in `metrics/__init__.py`, and the whole dataset registry in
+`datasets/__init__.py`. Those functions *are* exercised by the test suite; they are just not
+measured, so the reported 82.7% describes a smaller package than the one that ships, and CI's
+`PATCH_MIN_THRESHOLD: 80` diff-cover gate ([.github/workflows/ci.yml](.github/workflows/ci.yml))
+cannot see changes to them at all.
+
+**Direction:** replace the pattern with explicit entries (`_version.py`, `setup.py`,
+`*/tests/*`). Expect the headline number to move; that movement is the point.
+
 
 ## Testing
 
@@ -420,6 +440,12 @@ non-default field names would have caught it.
 tiny fixture with `--export json`, asserting exit code 0 and the presence of expected keys in
 `metrics.json`, covers the whole path without asserting on console formatting — which is the
 distinction `AGENTS.md` is drawing.
+
+### R18. Tests resolve fixtures relative to the working directory — Low
+
+**Status: resolved.**  [tests/test_datasets.py:21](tests/test_datasets.py#L21) and its neighbours use
+`Path("tests/data/…")`, so the suite passes only when invoked from the repository root. Anchor
+on `Path(__file__).parent / "data"`, ideally via a fixture.
 
 ### R19. `test_determinism_same_seed` asserts nothing — Low
 
@@ -684,7 +710,7 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 1. **R1** — done except purging the corpus from git history, which is a prerequisite for
    going public and needs coordinating across clones.
 2. **R2**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
-   **R3** is done; **R16** was to ride along with it and still stands on its own: it is the
+   **R3** is done; **R39** was to ride along with it and still stands on its own: it is the
    message a user actually sees when the keys are wrong.
 3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
 4. **R17** — make the test signal trustworthy before building on it.
