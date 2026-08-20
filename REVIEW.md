@@ -39,7 +39,7 @@ What would actually bite an outside user, in order: the bundled corpus has no li
 provenance (**R1**, mostly resolved); most of the per-category table reports fabricated numbers
 (**R2**); three CLI flags silently do nothing (**R3**); and `pip install` yields an unimportable
 package (**R11**). Beyond those, the largest structural item is that the public API bakes `Stub`
-into its type names right before real models land (**R24**).
+into its type names right before real models land (**R31**).
 
 ---
 
@@ -159,11 +159,43 @@ the defaults).
 The user-visible consequence: a researcher points the tool at their own JSON whose text field
 is `"text"` rather than `"answer"`, passes `--text-key text`, and gets
 `ValueError: No valid samples with required keys in <path>` — an error that names the file but
-not the reason, for a flag that was accepted without complaint.
+not the reason, for a flag that was accepted without complaint. That message is its own finding
+(**R16**), because it will stay the observable symptom of any key mismatch after this one is
+fixed.
 
-**Direction:** make the three `DatasetSpec` fields `str | None = None` so the `or` fallback
-works as written, and extend `--register-file-dataset` to accept key overrides. Add a test
-registering a dataset with non-default field names and asserting it loads.
+**Direction:** keep all three `DatasetSpec` fields as required `str` and make the CLI flags feed
+*registration* rather than evaluation. Evaluation cannot proceed without the keys, so every
+registered dataset should carry a usable triple by construction; widening the fields to
+`str | None` would relocate that guarantee into every consumer instead of resolving it. The `or`
+fallback is also the wrong shape independent of its typing — `--text-key` is a single global flag,
+so even a working fallback would apply one schema to every selected dataset at once. Concretely:
+
+1. Hoist the default literals into named constants in
+   [datasets/__init__.py](text_detection_baselines/datasets/__init__.py) —
+   `DEFAULT_TEXT_KEY = "answer"`, `DEFAULT_LABEL_KEY = "label"`,
+   `DEFAULT_CATEGORY_KEY = "contribution_level"` — and use them for the `DatasetSpec` field
+   defaults, for `register_file_dataset`'s keyword defaults, and for the three `click.option`
+   defaults. Those literals are currently spelled out three times across two files with nothing
+   tying them together, so they can drift silently.
+2. Pass the flags into registration at [cli.py:471-473](text_detection_baselines/cli.py#L471-L473):
+   `register_file_dataset(name=name, path=dataset_path, text_key=text_key, label_key=label_key,
+   category_key=category_key)`.
+3. Drop the `or` at [cli.py:501-503](text_detection_baselines/cli.py#L501-L503) in favour of
+   `text_key=dataset.text_key`. The spec becomes the single source of truth, and there is no
+   longer a fallback branch that can be dead.
+4. Retarget the help text, which is what currently implies the flags are global: "Field name for
+   text in datasets registered via `--register-file-dataset`." Likewise for the other two.
+
+Built-in specs such as `gede` are then explicitly unaffected by these flags — which is already
+the actual behaviour; this change stops the help text advertising otherwise. The flags end up
+doing exactly one legible thing: describing the schema of files registered at runtime.
+
+One limitation worth stating in the help text: the flags apply uniformly to every
+`--register-file-dataset` entry in a run, so two runtime files with different schemas cannot be
+expressed. See **R38**.
+
+Tests: register a runtime dataset over a JSON whose text field is `text`, pass `--text-key text`,
+and assert it loads; and assert that `--text-key` leaves the `gede` spec's `answer` intact.
 
 ---
 
@@ -197,6 +229,34 @@ that would be caught anyway.
 
 **Direction:** count skipped rows and log at WARNING with the count and the first few offending
 indices. Consider a `--strict` flag that makes any skip fatal.
+
+### R16. The "no valid samples" error names the file but not the reason — Medium
+
+When the key check at [datasets/file.py:78](text_detection_baselines/datasets/file.py#L78) skips
+every record, [file.py:84-85](text_detection_baselines/datasets/file.py#L84-L85) raises
+`ValueError(f"No valid samples with required keys in {path}")`. The message states neither which
+keys were required nor which keys the file actually contains, so the one fact needed to fix the
+problem is the one fact withheld. It also reaches the user as a bare traceback rather than a CLI
+diagnostic.
+
+This is the first error a researcher hits when pointing the tool at their own data. It is the
+observable symptom of **R3** today, and it stays the observable symptom of every future key
+mismatch — a typo'd `--text-key`, a renamed column, a JSON export that nests records one level
+deeper — once R3 is fixed. Distinct from **R5**, which is about partial drops that are never
+reported at all; this is the total-failure case that *is* reported, unhelpfully.
+
+**Direction:** name the required keys and the keys present on the first record, and surface it
+through `click.ClickException` at the CLI boundary so it does not print a traceback:
+
+```
+No samples in data/my_corpus.jsonl had required keys 'text' and 'label'
+(first record has: answer, label, contribution_level)
+```
+
+Listing the fields that are actually there turns a dead end into a one-line diagnosis, and it
+distinguishes the two failure modes the current message conflates: wrong key names versus a file
+whose records are not the shape the loader expects at all. Fold this into whatever skip
+bookkeeping R5 introduces so both findings share a single counting pass.
 
 ### R6. A single-class dataset is an unhandled `ValueError` — Low
 
@@ -419,6 +479,14 @@ actual merits.
 * `--output-dir` defaults to `evaluation_results` and is advertised in `--help`, but is only
   created when `--export` is also passed. Harmless, mildly confusing.
 
+### R38. Text, label, category key overrides cannot be specified per-dataset
+
+Specifying a dataset's text key, label key, and/or category key in the CLI sets those keys uniformly across all datasets; those keys cannot be specified differently per-dataset.
+
+**Direction:** Extend `NamePathParamType`
+([cli.py:87](text_detection_baselines/cli.py#L87)) to accept optional per-entry key overrides,
+rather than adding more global flags.
+
 ---
 
 ## Documentation
@@ -604,6 +672,7 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 1. **R1** — done except purging the corpus from git history, which is a prerequisite for
    going public and needs coordinating across clones.
 2. **R2**, **R3**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
+   **R16** rides along with R3: it is the message a user actually sees when the keys are wrong.
 3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
 4. **R17** — make the test signal trustworthy before building on it.
 5. **R11**, **R12**, **R13**, **R14** — the PyPI gate, as one batch when a release is in view.
