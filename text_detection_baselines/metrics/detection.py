@@ -110,6 +110,38 @@ def average_precision_metric(
     return float(average_precision_score(kept_labels, kept_scores))
 
 
+def _rate_at_tau(
+    labels: np.ndarray,
+    ood_flags: np.ndarray,
+    flags: np.ndarray,
+    label_value: int,
+) -> float | None:
+    """Flagged fraction of one class among the non-OOD samples, or None if empty.
+
+    ``flags`` is already ``False`` for every OOD sample, so the denominator is
+    restricted to ``~ood_flags`` as well: without that, an OOD sample could only
+    ever land in the denominator, and a slice whose entire denominator class is
+    OOD would read as a measured rate of zero.
+
+    Args:
+        labels: Binary array (0=human, 1=machine).
+        ood_flags: True where the sample is flagged out-of-distribution.
+        flags: True where the sample was called machine at the threshold.
+        label_value: The class forming the denominator — 0 for FPR, 1 for TPR.
+
+    Returns:
+        The flagged fraction of that class, or ``None`` when the class has no
+        non-OOD sample.  A ``max(n, 1)`` guard would return ``0.0`` instead,
+        which renders as an ordinary measurement on a slice that cannot support
+        one — single-label category slices are the common case.
+    """
+    denominator_mask = (labels == label_value) & ~ood_flags
+    n_denominator = int(denominator_mask.sum())
+    if n_denominator == 0:
+        return None
+    return float((flags & denominator_mask).sum() / n_denominator)
+
+
 @register_metric("fpr_at_tau")
 def fpr_at_tau_metric(
     labels: np.ndarray,
@@ -118,12 +150,15 @@ def fpr_at_tau_metric(
     flags: np.ndarray,
     target_alpha: float,
     tau: float,
-) -> float:
-    """False positive rate at threshold tau among human samples."""
-    del scores, ood_flags, target_alpha, tau
-    human_mask = labels == 0
-    n_human = int(human_mask.sum())
-    return float((flags & human_mask).sum() / max(n_human, 1))
+) -> float | None:
+    """False positive rate at threshold tau among non-OOD human samples.
+
+    Returns:
+        The false positive rate, or ``None`` when the slice holds no non-OOD
+        human sample (see :func:`_rate_at_tau`).
+    """
+    del scores, target_alpha, tau
+    return _rate_at_tau(labels, ood_flags, flags, label_value=0)
 
 
 @register_metric("tpr_at_tau")
@@ -134,12 +169,15 @@ def tpr_at_tau_metric(
     flags: np.ndarray,
     target_alpha: float,
     tau: float,
-) -> float:
-    """True positive rate at threshold tau among machine samples."""
-    del scores, ood_flags, target_alpha, tau
-    machine_mask = labels == 1
-    n_machine = int(machine_mask.sum())
-    return float((flags & machine_mask).sum() / max(n_machine, 1))
+) -> float | None:
+    """True positive rate at threshold tau among non-OOD machine samples.
+
+    Returns:
+        The true positive rate, or ``None`` when the slice holds no non-OOD
+        machine sample (see :func:`_rate_at_tau`).
+    """
+    del scores, target_alpha, tau
+    return _rate_at_tau(labels, ood_flags, flags, label_value=1)
 
 
 @register_metric("calibration_gap")
@@ -150,12 +188,19 @@ def calibration_gap_metric(
     flags: np.ndarray,
     target_alpha: float,
     tau: float,
-) -> float:
-    """Absolute distance between FPR@tau and target_alpha."""
-    del scores, ood_flags, tau
-    human_mask = labels == 0
-    n_human = int(human_mask.sum())
-    fpr = float((flags & human_mask).sum() / max(n_human, 1))
+) -> float | None:
+    """Absolute distance between FPR@tau and target_alpha.
+
+    Returns:
+        ``abs(fpr_at_tau - target_alpha)``, or ``None`` when ``fpr_at_tau`` is
+        undefined.  Substituting ``0.0`` for the missing rate would report
+        exactly ``target_alpha`` — a plausible-looking gap that measures the
+        guard rather than the threshold.
+    """
+    del scores, tau
+    fpr = _rate_at_tau(labels, ood_flags, flags, label_value=0)
+    if fpr is None:
+        return None
     return abs(fpr - target_alpha)
 
 

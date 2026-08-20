@@ -86,16 +86,19 @@ machine-generated**, and labels are `0` = human, `1` = machine.
 
 Defined in [metrics/detection.py](text_detection_baselines/metrics/detection.py).
 All three ranking metrics are computed on **non-OOD samples only** and return `null`
-when that subset is empty or contains just one class.
+when that subset is empty or contains just one class. `fpr_at_tau`, `tpr_at_tau`, and
+`calibration_gap` are likewise computed on non-OOD samples and return `null` when the
+class forming their denominator has none — a single-label slice cannot support a
+false positive rate or a true positive rate, so none is reported.
 
 | Registry key | Table | Description |
 | --- | --- | --- |
 | `auroc` | AUROC | Area under the ROC curve. |
 | `auroc_at_1pct` | AUROC@1% | Partial AUROC over the FPR ≤ 1% region — the regime a deployed detector actually operates in. See the note on its scaling below. |
 | `average_precision` | AP | Average precision — the precision-recall summary. Sums over achievable operating points rather than interpolating between them, as trapezoidal PR-AUC would. |
-| `fpr_at_tau` | FPR@tau | False positive rate at the learned threshold, among human samples. |
-| `tpr_at_tau` | TPR@tau | True positive rate at the learned threshold, among machine samples. |
-| `calibration_gap` | CalGap | `abs(fpr_at_tau - target_alpha)`, i.e. how far threshold learning missed its FPR budget. |
+| `fpr_at_tau` | FPR@tau | False positive rate at the learned threshold, among non-OOD human samples. `null` when the slice has none. |
+| `tpr_at_tau` | TPR@tau | True positive rate at the learned threshold, among non-OOD machine samples. `null` when the slice has none. |
+| `calibration_gap` | CalGap | `abs(fpr_at_tau - target_alpha)`, i.e. how far threshold learning missed its FPR budget. `null` whenever `fpr_at_tau` is. |
 | `ood_percent` | OOD% | Percentage of samples flagged out-of-distribution. |
 
 The threshold `tau` is learned per run as the `1 - target_alpha` quantile of
@@ -150,9 +153,12 @@ deliberately diverges from the researchers' implementation:
   low-FPR region scores below 0.5 (`dummy-raw` scores 0.4976 on `gede`).
 
 * **Registered metrics exclude OOD-flagged samples; the abstention curve does not.**
-  `auroc`, `auroc_at_1pct`, `average_precision`, `brier`, and `ece` all restrict to
-  `~ood_flags`, so they will not reproduce values computed over the whole
-  population, and every column of a results row describes the same sample set.
+  `auroc`, `auroc_at_1pct`, `average_precision`, `brier`, `ece`, `fpr_at_tau`,
+  `tpr_at_tau`, and `calibration_gap` all restrict to `~ood_flags`, so they will not
+  reproduce values computed over the whole population, and every column of a results
+  row describes the same sample set. For the three threshold metrics this applies to
+  the denominator as well as the numerator: an OOD sample is dropped rather than
+  counted as an unflagged member of its class.
   `compute_abstention_curve` currently takes no `ood_flags` argument and so is a
   whole-population measure — its AUROC is not comparable to `auroc` from the same
   run.

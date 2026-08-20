@@ -171,6 +171,12 @@ So three of the eleven per-category columns are `-` for every row. This is a
 property of the dataset, not a metric bug, but it makes the per-category table
 substantially less useful than it appears.
 
+Since REVIEW.md R2, the threshold metrics behave the same way on these slices:
+`fpr_at_tau` and `calibration_gap` are `-` on the eight all-machine categories and
+`tpr_at_tau` is `-` on `Human`, where they previously reported `0.000` and
+`target_alpha` from a `max(n, 1)` denominator guard. Only `ood_percent` and the
+count columns are populated for every per-category row.
+
 Note when reconciling against older result tables: the reference implementation did
 not guard this case. It returned `pr_auc = 1.0` for each of the eight all-machine
 categories and `0.5` for `Human`, plus `roc_auc = nan` with a warning rather than an

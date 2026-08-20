@@ -58,7 +58,7 @@ def test_detection_metrics(metric_inputs):
     assert auroc_at_1pct_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
     assert average_precision_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
     assert fpr_at_tau_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 0.0
-    assert tpr_at_tau_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 0.5
+    assert tpr_at_tau_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 1.0
     assert calibration_gap_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 0.05
     assert ood_percent_metric(labels, scores, ood_flags, flags, target_alpha, tau) == 25.0
 
@@ -92,6 +92,61 @@ def test_ranking_metrics_none_when_all_samples_ood(metric):
     scores = np.array([0.1, 0.9], dtype=float)
     ood_flags = np.ones(2, dtype=bool)
     assert metric(labels, scores, ood_flags, ood_flags, 0.05, 0.5) is None
+
+
+@pytest.mark.parametrize(
+    ("metric", "absent_label", "present_label"),
+    [
+        (fpr_at_tau_metric, 0, 1),
+        (tpr_at_tau_metric, 1, 0),
+        (calibration_gap_metric, 0, 1),
+    ],
+)
+def test_threshold_metrics_none_when_denominator_class_absent(metric, absent_label, present_label):
+    """A single-label slice has no rate to report, and must not report 0.0 for one.
+
+    Eight of the nine bundled `gede` categories are all-machine, so the `0.0`
+    a ``max(n, 1)`` denominator guard returns would render as a measurement in
+    almost every per-category row.  `calibration_gap` is worse still: it read
+    ``abs(0.0 - target_alpha)``, i.e. exactly `target_alpha`.
+    """
+    del absent_label
+    labels = np.full(3, present_label, dtype=int)
+    scores = np.array([0.1, 0.6, 0.9], dtype=float)
+    ood_flags = np.zeros(3, dtype=bool)
+    flags = (scores >= 0.5) & ~ood_flags
+    assert metric(labels, scores, ood_flags, flags, 0.05, 0.5) is None
+
+
+@pytest.mark.parametrize(
+    ("metric", "denominator_label"),
+    [(fpr_at_tau_metric, 0), (tpr_at_tau_metric, 1), (calibration_gap_metric, 0)],
+)
+def test_threshold_metrics_none_when_denominator_class_all_ood(metric, denominator_label):
+    """An all-OOD denominator class is as empty as an absent one.
+
+    ``flags`` excludes OOD samples, so leaving them in the denominator would
+    fabricate the same zero rate by a different route.
+    """
+    labels = np.array([denominator_label, 1 - denominator_label], dtype=int)
+    scores = np.array([0.9, 0.9], dtype=float)
+    ood_flags = np.array([True, False], dtype=bool)
+    flags = (scores >= 0.5) & ~ood_flags
+    assert metric(labels, scores, ood_flags, flags, 0.05, 0.5) is None
+
+
+@pytest.mark.parametrize(
+    ("metric", "denominator_label"),
+    [(fpr_at_tau_metric, 0), (tpr_at_tau_metric, 1)],
+)
+def test_threshold_metrics_exclude_ood_from_denominator(metric, denominator_label):
+    """OOD samples of the denominator class are dropped, not counted as unflagged."""
+    labels = np.full(2, denominator_label, dtype=int)
+    scores = np.array([0.9, 0.9], dtype=float)
+    ood_flags = np.array([False, True], dtype=bool)
+    flags = (scores >= 0.5) & ~ood_flags
+    # One non-OOD sample, flagged: 1/1, not 1/2.
+    assert metric(labels, scores, ood_flags, flags, 0.05, 0.5) == pytest.approx(1.0)
 
 
 def test_calibration_metrics(metric_inputs):

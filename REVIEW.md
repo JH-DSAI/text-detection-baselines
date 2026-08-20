@@ -36,9 +36,9 @@ The infrastructure (pixi, multi-Python CI matrix, bandit, mypy, Docker, Zenodo/R
 is well beyond what internal research code usually carries.
 
 What would actually bite an outside user, in order: the bundled corpus has no licence or
-provenance (**R1**, mostly resolved); most of the per-category table reports fabricated numbers
-(**R2**); three CLI flags silently did nothing (**R3**, resolved); and `pip install` yields an
-unimportable package (**R11**). Beyond those, the largest structural item is that the public API bakes `Stub`
+provenance (**R1**, mostly resolved); most of the per-category table reported fabricated numbers
+(**R2**, resolved); three CLI flags silently did nothing (**R3**, resolved); and `pip install`
+yields an unimportable package (**R11**). Beyond those, the largest structural item is that the public API bakes `Stub`
 into its type names right before real models land (**R31**).
 
 ---
@@ -48,7 +48,7 @@ into its type names right before real models land (**R31**).
 | ID | Finding | Why it blocks |
 | --- | --- | --- |
 | **R1** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge and dataset reproduction test still outstanding |
-| **R2** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Publishes numbers that describe nothing, indistinguishable from real ones |
+| **R2** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Resolved: the three metrics return `None` on slices whose denominator class is empty, so the per-category table no longer publishes numbers that describe nothing |
 | **R3** | `--text-key` / `--label-key` / `--category-key` are silently inert | Resolved: the flags now feed runtime registration, so the documented path for using your own data works |
 
 R11 (broken `pip install`) is a blocker for PyPI specifically, not for the currently supported
@@ -115,6 +115,33 @@ acceptance stays with the user — which also resolves R12.
 
 ### R2. Per-category FPR@tau, TPR@tau, and CalGap are fabricated for single-label categories — High
 
+**Status: resolved.** All three metrics now return `None` instead of dividing by a guarded
+denominator. `fpr_at_tau_metric` and `tpr_at_tau_metric` delegate to a shared `_rate_at_tau`
+helper in [metrics/detection.py](text_detection_baselines/metrics/detection.py) that builds the
+denominator as `(labels == label_value) & ~ood_flags` and returns `None` when it is empty;
+`calibration_gap_metric` calls the same helper and propagates the `None` rather than computing
+`abs(0.0 - target_alpha)`. The return annotations widened from `float` to `float | None`, which
+`MetricFunc` already admitted, so nothing downstream changed — `normalize_metric_value` passes
+`None` through and the console renders `-`.
+
+The denominator excludes OOD samples, not just absent classes. `flags` is already
+`(scores >= tau) & ~ood_flags`, so an OOD sample could only ever land in the denominator; a
+slice whose entire denominator class was OOD would otherwise have kept reporting a measured
+rate of zero by a second route. This also makes the README's `target_alpha = 1.0` → `FPR = 1.0`
+claim hold on datasets with OOD humans. The one behaviour change outside the empty case is that
+`tpr_at_tau` no longer counts OOD machine samples as misses; the abstention curve remains the
+place where coverage is measured. README's metric table, its non-OOD paragraph, and the
+"Registered metrics exclude OOD-flagged samples" note now name all three metrics, and
+ISSUES.md #11 records that six per-category columns rather than three are now `-` on `gede`.
+
+Three regression tests cover it, each parameterized over all three metrics: denominator class
+absent from the slice, denominator class present but entirely OOD, and — for `fpr_at_tau` /
+`tpr_at_tau` — a mixed slice asserting the rate is `1/1` rather than `1/2`. The existing
+`test_detection_metrics` expectation for `tpr_at_tau` moved from `0.5` to `1.0` for that same
+reason. On the bundled `demo` dataset the per-category FPR@tau and CalGap columns now read `-`
+for `Summary` and `Task`, and TPR@tau reads `-` for `Human`. The diagnosis below is kept as the
+record of why the fix took this shape; its line references point at the pre-fix code.
+
 `fpr_at_tau_metric` and `tpr_at_tau_metric`
 ([metrics/detection.py:113-159](text_detection_baselines/metrics/detection.py#L113-L159))
 divide by `max(n_human, 1)` and `max(n_machine, 1)`. When the denominator class is absent from
@@ -139,9 +166,10 @@ ranking metrics go `None` on these slices, and a reader seeing `-` correctly inf
 A reader seeing `0.000` next to `-` reasonably infers "defined, and zero." This finding extends
 #11 to the metrics it does not cover, and is more serious than #11 for exactly that reason.
 
-**Direction:** return `None` when the denominator class is empty, in all three metrics. The
-`max(n, 1)` guard was presumably added to avoid a divide-by-zero; `None` is the correct answer
-to the same question. Add a regression test asserting `None` for both single-label directions.
+**Direction (implemented):** return `None` when the denominator class is empty, in all three
+metrics. The `max(n, 1)` guard was presumably added to avoid a divide-by-zero; `None` is the
+correct answer to the same question. Add a regression test asserting `None` for both
+single-label directions.
 
 ### R3. `--text-key`, `--label-key`, and `--category-key` are silently inert — High
 
@@ -709,9 +737,9 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 
 1. **R1** — done except purging the corpus from git history, which is a prerequisite for
    going public and needs coordinating across clones.
-2. **R2**, **R4** — correctness. Small, well-scoped, and each is a silent-wrongness bug.
-   **R3** is done; **R39** was to ride along with it and still stands on its own: it is the
-   message a user actually sees when the keys are wrong.
+2. **R4** — correctness. Small, well-scoped, and a silent-wrongness bug. **R2** and **R3** are
+   done; **R39** was to ride along with R3 and still stands on its own: it is the message a user
+   actually sees when the keys are wrong.
 3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
 4. **R17** — make the test signal trustworthy before building on it.
 5. **R11**, **R12**, **R13**, **R14** — the PyPI gate, as one batch when a release is in view.
