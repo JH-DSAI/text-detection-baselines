@@ -23,6 +23,8 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
+          pixi-version: v0.75.0
+          environments: dev
           cache: true
       - name: Lint
         run: pixi run -e dev check-style
@@ -41,16 +43,20 @@ jobs:
       COVERAGE_XML: coverage.xml
       PATCH_MIN_THRESHOLD: 80
     steps:
+    - name: Compute 312-style Python version
+      run: echo "PYTHON_ALT=${PYTHON//./}" >> $GITHUB_ENV
+
     - uses: actions/checkout@v6
       with:
-          lfs: true
           fetch-depth: 0
     - name: Set up pixi
       uses: prefix-dev/setup-pixi@v0.8.14
       with:
-          cache: true
+        pixi-version: v0.75.0
+        environments: test-py${{ env.PYTHON_ALT }}
+        cache: true
     - name: Test with pixi (pytest)
-      run: pixi run -e test-py${PYTHON//./} test
+      run: pixi run -e test-py${PYTHON_ALT} test
     # Only save & upload coverage once per commit
     - name: Archive coverage report
       if: matrix.python-version == '3.14' && matrix.os == 'ubuntu-latest'
@@ -78,6 +84,8 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.14
         with:
+          pixi-version: v0.75.0
+          environments: docs
           cache: true
       - name: Build sphinx docs.
         run: pixi run -e docs build-docs

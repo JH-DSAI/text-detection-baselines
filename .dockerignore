@@ -2,6 +2,10 @@
 .gitignore
 .gitattributes
 
+# Prepared datasets are user-supplied and licence-encumbered; never bake them
+# into an image. The bundled synthetic demo dataset lives inside the package.
+datasets/
+
 .pixi
 .tox
 venv

@@ -1,3 +1,19 @@
+# Prepared datasets. Third-party corpora are never redistributed here; see
+# datasets/README.md.
+datasets/*.jsonl
+datasets/*.meta.json
+
+# Output files
+metrics.json
+metrics.yaml
+overall-metrics.csv
+per-category-metrics.csv
+
+# Editor swap files
+.*.swp
+.*.swo
+*~
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

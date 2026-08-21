@@ -11,14 +11,13 @@ license = "BSD-3-Clause"
 license-files = ["LICEN[CS]E*", ".zenodo.json"]
 
 requires-python = ">=3.11"
-dependencies = [
-    "fastapi[all]",
-]
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
     "bandit>=1.7",
     "build",
+    "mypy",
     "pytest",
     "pytest-cov",
     "ruff",
@@ -52,23 +51,10 @@ version-file = "text_detection_baselines/_version.py"
 packages = ["text_detection_baselines"]
 
 [tool.bandit]
-exclude_dirs = ["tests"]
+exclude_dirs = ["tests", "Assessing-LLM-Text-Detection-in-Educational-Contexts"]
 
 [tool.ruff]
 line-length = 120
-lint.select = ["ALL"]
-lint.ignore = [
-    "ANN002",  # https://docs.astral.sh/ruff/rules/missing-type-args/
-    "ANN003",  # https://docs.astral.sh/ruff/rules/missing-type-kwargs/
-    "ANN401",  # https://docs.astral.sh/ruff/rules/any-type/
-    "PLR0913",  # https://docs.astral.sh/ruff/rules/too-many-arguments/
-    "EM101",  # https://docs.astral.sh/ruff/rules/raw-string-in-exception/
-    "EM102",  # https://docs.astral.sh/ruff/rules/f-string-in-exception/
-    "TRY003",  # https://docs.astral.sh/ruff/rules/raise-vanilla-args/
-    "D407",  # https://docs.astral.sh/ruff/rules/dashed-underline-after-section/
-    "COM812", # https://docs.astral.sh/ruff/rules/missing-trailing-comma/
-    "ISC001", # https://docs.astral.sh/ruff/rules/single-line-implicit-string-concatenation/
-]
 exclude = [
     ".bzr",
     ".direnv",
@@ -82,6 +68,7 @@ exclude = [
     ".ruff_cache",
     ".svn",
     ".tox",
+    ".pixi",
     ".venv",
     "__pypackages__",
     "_build",
@@ -91,7 +78,8 @@ exclude = [
     "docs",
     "node_modules",
     "venv",
-    "_version.py"
+    "_version.py",
+    "Assessing-LLM-Text-Detection-in-Educational-Contexts"
 ]
 target-version = "py311"
 
@@ -112,12 +100,30 @@ docstring-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8
 inline-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_inline-quotes
 multiline-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_multiline-quotes
 
+[tool.mypy]
+files = ["text_detection_baselines/**/*.py"]
+
 [tool.pixi.workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64", "linux-aarch64", "osx-arm64", "win-64"]
+platforms = [
+    "linux-64",
+    {platform = "linux-64", cuda = "12"},
+    "linux-aarch64",
+    {platform = "linux-aarch64", cuda = "12"},
+    "osx-arm64",
+    "win-64",
+    {platform = "win-64", cuda = "12"}
+]
 
 [tool.pixi.dependencies]
 python = ">=3.11,<3.15"
+pytorch = "~=2.0"
+numpy = "~=2.4"
+scikit-learn = "~=1.8"
+transformers = "~=4.44"
+click = ">=8.3.2,<9"
+pyyaml = ">=6.0.3,<7"
+rich = ">=15.0.0,<16"
 
 [tool.pixi.pypi-dependencies]
 text-detection-baselines = { path = ".", editable = true }
@@ -128,6 +134,8 @@ build = ">=1.0"
 pytest = ">=9.0"
 pytest-cov = ">=7.1"
 ruff = ">=0.15"
+mypy = ">=1.20"
+types-pyyaml = ">=6.0.12.20260408, <7"
 
 [tool.pixi.feature.docs.pypi-dependencies]
 sphinx = ">=9.0"
@@ -148,23 +156,46 @@ python = "3.13.*"
 [tool.pixi.feature.py314.dependencies]
 python = "3.14.*"
 
+[tool.pixi.feature.cuda]
+channels = ["nvidia"]
+dependencies = {cuda = "12.*", pytorch-gpu = "2.*"}
+platforms = [
+    "linux-64-cuda-12",
+    "linux-aarch64-cuda-12",
+    "win-64-cuda-12"
+]
+
 [tool.pixi.environments]
 default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
-docs = { features = ["dev", "docs"], solve-group = "default" }
-dist = { features = ["dev"], solve-group = "default" }
 test-py311 = { features = ["dev", "py311"], solve-group = "test-py311" }
 test-py312 = { features = ["dev", "py312"], solve-group = "test-py312" }
 test-py313 = { features = ["dev", "py313"], solve-group = "test-py313" }
 test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
+cuda = { features = ["cuda"] }
+
+[tool.pixi.environments.dist]
+features = ["dev"]
+solve-group = "default"
+tasks = { build-dist = "python -m build" }
+
+[tool.pixi.environments.docs]
+features = ["dev", "docs"]
+solve-group = "default"
+tasks = { build-docs = "cd docs && make clean html latex epub" }
 
 [tool.pixi.tasks]
-check-style = "ruff format . --check && ruff check ."
+main = "python -m text_detection_baselines.cli"
+prepare-gede = "python -m text_detection_baselines.prepare_gede"
+make-demo-dataset = "python tools/make_demo_dataset.py"
+
+[tool.pixi.feature.dev.tasks]
+check-style = "ruff format --check . && ruff check ."
 check-security = "bandit -c pyproject.toml --severity-level=medium -r text_detection_baselines"
+check-types = "mypy"
 format = "ruff format . && ruff check --select I --fix ."
+fix = "ruff check --fix ."
 test = "pytest --cov=text_detection_baselines --cov-branch --cov-report term --cov-report=xml --cov-report=json --cov-report=term-missing"
-build-docs = "cd docs && make clean html latex epub"
-build-dist = "python -m build"
-start = "uvicorn text_detection_baselines.app.main:app --host 0.0.0.0 --port 8000"
-lint = { depends-on = ["check-style", "check-security"] }
-ci = { depends-on = ["check-style", "check-security", "test"] }
+lint = { depends-on = ["check-style", "check-security", "check-types"] }
+ci = { depends-on = ["lint", "test"] }
+
