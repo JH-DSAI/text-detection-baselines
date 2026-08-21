@@ -736,11 +736,12 @@ Recorded so these read as decisions rather than oversights, given the stated pol
 
 1. **R1** — done except purging the corpus from git history, which is a prerequisite for
    going public and needs coordinating across clones.
-2. **R4** — correctness. Small, well-scoped, and a silent-wrongness bug. **R2** and **R3** are
+2. **R40** — correctness (GEDE data discrepancies).
+3. **R4** — correctness. Small, well-scoped, and a silent-wrongness bug. **R2** and **R3** are
    done; **R39** was to ride along with R3 and still stands on its own: it is the message a user
    actually sees when the keys are wrong.
-3. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
-4. **R17** — make the test signal trustworthy before building on it.
-5. **R11**, **R12**, **R13**, **R14** — the PyPI gate, as one batch when a release is in view.
-6. **R25**, **R26**, **R27** — documentation, before announcing to anyone outside.
-7. **R33**, **R34** — settle before the Azure integration starts, not during.
+4. **R31**, **R32** — the two renames/reshapes that get more expensive with every week of use.
+5. **R17** — make the test signal trustworthy before building on it.
+6. **R11**, **R12**, **R13**, **R14** — the PyPI gate, as one batch when a release is in view.
+7. **R25**, **R26**, **R27** — documentation, before announcing to anyone outside.
+8. **R33**, **R34** — settle before the Azure integration starts, not during.
