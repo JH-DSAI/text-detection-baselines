@@ -47,9 +47,9 @@ into its type names right before real models land (**R31**).
 
 | ID | Finding | Why it blocks |
 | --- | --- | --- |
-| **R1** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge and dataset reproduction test still outstanding |
-| **R2** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Resolved: the three metrics return `None` on slices whose denominator class is empty, so the per-category table no longer publishes numbers that describe nothing |
-| **R3** | `--text-key` / `--label-key` / `--category-key` are silently inert | Resolved: the flags now feed runtime registration, so the documented path for using your own data works |
+| **R1 (mostly resolved)** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge and dataset reproduction test still outstanding |
+| **R2 (resolved)** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Resolved: the three metrics return `None` on slices whose denominator class is empty, so the per-category table no longer publishes numbers that describe nothing |
+| **R3 (resolved)** | `--text-key` / `--label-key` / `--category-key` are silently inert | Resolved: the flags now feed runtime registration, so the documented path for using your own data works |
 
 R11 (broken `pip install`) is a blocker for PyPI specifically, not for the currently supported
 clone-and-pixi path.
