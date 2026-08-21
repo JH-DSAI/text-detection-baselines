@@ -47,7 +47,7 @@ into its type names right before real models land (**R31**).
 
 | ID | Finding | Why it blocks |
 | --- | --- | --- |
-| **R1 (mostly resolved)** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge and dataset reproduction test still outstanding |
+| **R1 (mostly resolved)** | Bundled corpus has no licence, attribution, or provenance | Mostly resolved: corpus no longer redistributed. History purge still outstanding and dataset reproduction test failed with reconciliation deferred to a follow-up issue |
 | **R2 (resolved)** | Per-category FPR@tau / TPR@tau / CalGap are fabricated for single-label categories | Resolved: the three metrics return `None` on slices whose denominator class is empty, so the per-category table no longer publishes numbers that describe nothing |
 | **R3 (resolved)** | `--text-key` / `--label-key` / `--category-key` are silently inert | Resolved: the flags now feed runtime registration, so the documented path for using your own data works |
 
@@ -77,12 +77,7 @@ which is why the strip-and-prepare route was taken rather than seeking permissio
 * **Purge the blob and the old fixtures from git history.** Deleting them from `HEAD` does not
   remove them from clones or from GitHub's archive downloads. This is a prerequisite for the
   repository going public, and needs coordinating with anyone holding a clone.
-* **Verify the converter reproduces the published corpus.** The adapter is tested against a
-  synthetic database carrying upstream's schema, which covers the normalization rules and the
-  label derivation, but it has never been run against the real `database.db`. Do that once, and
-  diff the output against the deleted blob (recoverable from commit `2b2ec6b`) on the sorted
-  `(id, label, contribution_level, dataset, text_author)` tuples; an exact match on all 13,619
-  records is the strongest available evidence the conversion is faithful.
+* **Reconcile the reproduced corpus with that from the research team.** The adapter does not exactly reproduce the JSON corpus we had, as seen in `2b2ec6b` (to be purged).  Sixty entries have empty questions, and other discrepancies are present as well.  Reconciling these discrepancies appears non-trivial and is deferred to a follow-up issue, R40.
 
 ---
 
@@ -360,6 +355,10 @@ actually being suppressed.
 `labels`, but nothing checks it. A model returning a wrong-length `ood_flags` produces a
 broadcasting error deep inside a metric rather than at the model boundary. Cheap to fix in
 `__post_init__`, and worth doing before third parties write detectors.
+
+### R40. GEDE data is not exactly reproduced — High
+
+The GEDE adapter does not exactly reproduce the JSON corpus we had, as provided by the research team.  Sixty entries have empty questions, and other discrepancies are present as well.  These discrepancies might be due to additional postprocessing performed by the research team and/or changes in the upstream data.
 
 ---
 

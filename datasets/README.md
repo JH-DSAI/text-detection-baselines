@@ -86,18 +86,15 @@ repository for the current citations; it also carries the paper appendix.
 
 ### Acquisition
 
-1. Clone the upstream repository and follow its setup instructions. Doing so means
-   accepting the terms above.
-2. Unpack `database/database.db.zip` to `database/database.db`.
-3. Run upstream's `database/add_aae_to_database.py`. **This step is not optional.**
+1. Initialize submodules, cloning a fork of the GEDE repository—in doing so, accepting the terms above: `git submodule update --init`
+2. `cd Assessing-LLM-Text-Detection-in-Educational-Contexts`
+3. Unpack `database/database.db.zip` to `database/database.db`: `unzip database/database.db.zip`
+4. Download [the AAE dataset](https://tudatalib.ulb.tu-darmstadt.de/items/9177c48c-8bd5-4881-9cb4-0632b5941464) to `ArgumentAnnotatedEssays-2.0.zip`.
+5. Add the AAE essays to the database: `pixi x --spec pandas python database/add_aae_to_database.py`
    The published database ships with the Argument Annotated Essays texts blank, and
    the script fills them in by downloading the corpus from TU Darmstadt. Skipping it
    leaves 5,938 records with empty text.
-4. Convert the database into a file this package can load:
-
-```bash
-pixi run prepare-gede --source /path/to/database.db
-```
+6. Convert the database into a file this package can load: `cd .. && pixi run prepare-gede --source Assessing-LLM-Text-Detection-in-Educational-Contexts/database.db`
 
 With no `--out`, this writes `datasets/gede_essays.jsonl` in a source checkout, or
 `${XDG_CACHE_HOME:-~/.cache}/text-detection-baselines/gede_essays.jsonl` otherwise.
@@ -112,6 +109,14 @@ pixi run main -- --dataset gede
 
 If `gede` has not been prepared, `--help` marks it `(not prepared)` and selecting it
 fails with the command above rather than a missing-file traceback.
+
+**Note:**  This script does **not** exactly reproduce the GEDE essays JSON corpus compiled by the research team.  Sixty rows have empty questions, and there are other differences as well.  We do not (yet) have an explanation for these discrepancies; they may arise from changes to the data upstream and/or additional postprocessing by the research team.  You can view the differences by copying the researchers' `gede_essays.json` into `datasets/` and doing:
+
+```bash
+diff -u \
+    <(jq -MaS '.[]' datasets/gede_essays.json) \
+    <(jq -MaS . datasets/gede_essays.jsonl)
+```
 
 ### What the converter does
 
