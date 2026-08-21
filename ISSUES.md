@@ -12,7 +12,7 @@ currently computes.
 
 ## Blocking the abstention curve
 
-### 1. No model produces the `variances` input, so the curve is unreachable
+### I1. No model produces the `variances` input, so the curve is unreachable
 
 `compute_abstention_curve` in [selective.py](text_detection_baselines/metrics/selective.py)
 requires a per-sample uncertainty array. `StubModelOutput`
@@ -41,7 +41,7 @@ unchanged would abstain on the most confident samples and invert the whole curve
 unnormalized branch is already scaled by the score standard deviation and needs a
 choice of its own.
 
-### 2. The curve ignores `ood_flags`
+### I2. The curve ignores `ood_flags`
 
 Every registered metric restricts itself to non-OOD samples — the ranking metrics
 via `_non_ood_binary`, `brier` and `ece` via `_non_ood`.
@@ -53,7 +53,7 @@ comparable to the `auroc` reported for the same run.
 loudly that this curve is a whole-population measure. The former is more
 consistent.
 
-### 3. Curves cannot enter the metric registry, and there is no scalar summary
+### I3. Curves cannot enter the metric registry, and there is no scalar summary
 
 `MetricFunc` is typed `-> float | None` and `run_all_metrics` pipes every result
 through `normalize_metric_value`, which raises on a list. So the curve cannot be registered,
@@ -65,7 +65,7 @@ coverage-accuracy curve (AURC), or accuracy at a fixed coverage such as 80% — 
 selective-prediction quality shows up in the standard outputs. Keep the full curve
 available for plotting.
 
-### 4. `tau` is held fixed across the sweep rather than recalibrated
+### I4. `tau` is held fixed across the sweep rather than recalibrated
 
 At each abstention threshold, accuracy is computed against the `tau` learned on the
 *full* sample. After abstaining, the FPR at that `tau` drifts, so the reported
@@ -76,7 +76,7 @@ separate, and the operating point sliding away from `target_alpha`.
 per retained subset isolates separability; holding it fixed measures what a
 deployed system with a frozen threshold would actually do. Consider reporting both.
 
-### 5. Dropped sweep points are silent
+### I5. Dropped sweep points are silent
 
 Threshold points are skipped when fewer than two samples survive, when only one
 label survives, or when tied variances duplicate the preceding subset. The
@@ -86,7 +86,7 @@ points were dropped or why.
 **Direction:** return a `dropped` count or a per-point reason, so a caller can tell
 a 12-point curve that requested 20 from a genuinely 12-point sweep.
 
-### 6. The `min_quantile=0.1` default is arbitrary
+### I6. The `min_quantile=0.1` default is arbitrary
 
 The reference implementation hard-coded a floor of 0.5, which capped minimum
 coverage near 50% and hid the high-confidence regime entirely. The current default
@@ -100,7 +100,7 @@ sampled more densely.
 
 ## `auroc_at_1pct`
 
-### 7. Unstable when the negative class is small
+### I7. Unstable when the negative class is small
 
 The 1% FPR ceiling can only be resolved to `1 / n_human`. On the bundled `gede`
 dataset there are 916 human samples in total, so FPR ≤ 0.01 covers roughly nine
@@ -110,7 +110,7 @@ or subsampled slice is worse.
 **Direction:** return `None` below a minimum negative count (100 gives 1%
 resolution), or report a bootstrap interval alongside the point estimate.
 
-### 8. Values below 0.5 are possible and easy to misread
+### I8. Values below 0.5 are possible and easy to misread
 
 The McClish standardization maps a random ranker to 0.5 and a perfect ranker to
 1.0, but it does **not** clamp at 0.5: a ranker worse than chance in the low-FPR
@@ -120,7 +120,7 @@ this as a normalized AUROC-like quantity bounded below by 0.5 will be confused.
 **Direction:** note the actual range wherever the metric is surfaced. Already
 documented in the docstring and README.
 
-### 9. The 1% ceiling is hard-coded and unrelated to `target_alpha`
+### I9. The 1% ceiling is hard-coded and unrelated to `target_alpha`
 
 `--target-alpha` defaults to 0.05, so the threshold `tau` is learned for a 5% FPR
 budget while the partial AUROC summarizes the 1% regime. The two do not describe
@@ -134,7 +134,7 @@ parameterized metrics, which it currently does not.
 
 ## PR-curve summaries
 
-### 10. Average precision is not comparable across slices with different prevalence
+### I10. Average precision is not comparable across slices with different prevalence
 
 AP has the positive-class base rate as its floor. `gede` is 93.27% machine
 (12703/13619), which is why every model scores above 0.93 regardless of AUROC.
@@ -150,7 +150,7 @@ prevalence, over 1 minus prevalence) so slices become comparable.
 
 ## Dataset and reporting
 
-### 11. Every `gede` category is single-label, so per-category ranking metrics are all `None`
+### I11. Every `gede` category is single-label, so per-category ranking metrics are all `None`
 
 `auroc`, `auroc_at_1pct`, and `average_precision` all require both classes present.
 On `gede`, every `contribution_level` category contains exactly one label:
@@ -188,7 +188,7 @@ score each machine category against the shared human pool (which makes AUROC
 defined and answers "which generation style is hardest to detect"); or suppress
 ranking columns in the per-category table when no category has both labels.
 
-### 12. `task+resource` has 40 samples and is reported with the same precision as categories 45× larger
+### I12. `task+resource` has 40 samples and is reported with the same precision as categories 45× larger
 
 No sample-count floor and no uncertainty estimate, so a 40-sample category renders
 identically to a 1832-sample one.
@@ -196,7 +196,7 @@ identically to a 1832-sample one.
 **Direction:** report bootstrap confidence intervals, or flag categories below a
 minimum size.
 
-### 13. Console table columns are hard-coded positionally
+### I13. Console table columns are hard-coded positionally
 
 The registry is fully dynamic on the producer side, but `render_console_tables`
 ([cli.py](text_detection_baselines/cli.py)) hard-codes each column header and cell
@@ -207,7 +207,7 @@ CSV/JSON/YAML export needs no change, which makes the asymmetry easy to forget.
 **Direction:** give `MetricSpec` a display-name and ordering field and derive the
 table columns from the registry.
 
-### 14. The per-category table overflows an 80-column terminal
+### I14. The per-category table overflows an 80-column terminal
 
 Now at 11 columns (13 for normalized-score models), headers truncate to `AURO…`
 and dataset names to `dat…`.
