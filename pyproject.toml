@@ -51,7 +51,7 @@ version-file = "text_detection_baselines/_version.py"
 packages = ["text_detection_baselines"]
 
 [tool.bandit]
-exclude_dirs = ["tests"]
+exclude_dirs = ["tests", "Assessing-LLM-Text-Detection-in-Educational-Contexts"]
 
 [tool.ruff]
 line-length = 120
@@ -78,7 +78,8 @@ exclude = [
     "docs",
     "node_modules",
     "venv",
-    "_version.py"
+    "_version.py",
+    "Assessing-LLM-Text-Detection-in-Educational-Contexts"
 ]
 target-version = "py311"
 
