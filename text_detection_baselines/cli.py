@@ -559,8 +559,6 @@ def main(
             "No models selected. Use --model, or avoid excluding every model.",
         )
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-
     # Resolved and checked before any model is built: constructing ``smollm2``
     # downloads weights, which should not happen only to fail on a missing dataset.
     specs = [get_dataset_spec(name) for name in selected_datasets]
@@ -600,4 +598,9 @@ def main(
 
 
 if __name__ == "__main__":
+    # Configured at the process entry point rather than inside ``main``: ``basicConfig``
+    # binds a handler to the ``sys.stderr`` in effect at the first call and is a no-op
+    # afterwards, so calling it from the command body silently sends the logs of every
+    # later in-process invocation to the first caller's stream.
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     main()

@@ -20,6 +20,7 @@ dev = [
     "mypy",
     "pytest",
     "pytest-cov",
+    "pytest-timeout",
     "ruff",
     "hatchling>=1.27",
     "hatch-vcs>=0.4"
@@ -100,6 +101,13 @@ docstring-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8
 inline-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_inline-quotes
 multiline-quotes = "double"  # https://docs.astral.sh/ruff/settings/#lint_flake8-quotes_multiline-quotes
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The slowest test is the one remaining subprocess smoke test, at about two seconds.
+# This only ever fires on a genuine stall, turning a hung terminal into a test failure
+# with a traceback pointing at where it stalled.
+timeout = 60
+
 [tool.mypy]
 files = ["text_detection_baselines/**/*.py"]
 
@@ -133,6 +141,7 @@ bandit = ">=1.7"
 build = ">=1.0"
 pytest = ">=9.0"
 pytest-cov = ">=7.1"
+pytest-timeout = ">=2.4"
 ruff = ">=0.15"
 mypy = ">=1.20"
 types-pyyaml = ">=6.0.12.20260408, <7"

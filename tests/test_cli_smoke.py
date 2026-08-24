@@ -1,31 +1,29 @@
-"""End-to-end CLI checks run as subprocesses.
+"""End-to-end checks of the evaluation CLI.
 
-``AGENTS.md`` forbids ``click.testing.CliRunner``; these run the real entry point
-instead and assert only on exit status and the presence of expected keys, not on
-console formatting.
+Most CLI behaviour is covered in-process in ``test_cli.py``. What lives here is the
+part in-process invocation cannot reach: the dataset registry is populated at import
+(``datasets/__init__.py``), so the effect of ``TDB_GEDE_PATH`` on dataset resolution is
+only observable in a fresh interpreter. That test doubles as the check that
+``python -m text_detection_baselines.cli`` is wired up at all, covering the
+``__main__`` guard, its logging setup, and real process exit codes.
+
+Assertions are on exit status and exported data, not on console formatting.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 
-
-def _run(args, env=None):
-    return subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "text_detection_baselines.cli", *args],
-        capture_output=True,
-        text=True,
-        env=env,
-        check=False,
-    )
+from text_detection_baselines.cli import main
 
 
-def test_cli_evaluates_the_default_dataset_and_exports(tmp_path):
-    result = _run(["--export", "json", "--output-dir", str(tmp_path)])
+def test_cli_evaluates_the_default_dataset_and_exports(runner, tmp_path):
+    result = runner.invoke(main, ["--export", "json", "--output-dir", str(tmp_path)])
 
-    assert result.returncode == 0, result.stderr
+    assert result.exit_code == 0, result.output
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
 
     assert set(metrics) == {"overall", "per-category"}
@@ -42,13 +40,17 @@ def test_cli_evaluates_the_default_dataset_and_exports(tmp_path):
     assert categories["Human"]["dummy-norm"]["auroc"] is None
 
 
-def test_cli_reports_an_unprepared_dataset_without_a_traceback(tmp_path, monkeypatch):
-    import os
-
+def test_cli_reports_an_unprepared_dataset_without_a_traceback(tmp_path):
     env = dict(os.environ)
     env["TDB_GEDE_PATH"] = str(tmp_path / "never-prepared.jsonl")
 
-    result = _run(["--dataset", "gede"], env=env)
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "text_detection_baselines.cli", "--dataset", "gede"],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
 
     assert result.returncode != 0
     combined = result.stdout + result.stderr

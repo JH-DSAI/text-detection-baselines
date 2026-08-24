@@ -1,5 +1,6 @@
-"""Tests for CLI option selection helpers."""
+"""Tests for CLI option selection helpers and for the assembled command itself."""
 
+import json
 from pathlib import Path
 
 import click
@@ -16,9 +17,10 @@ from text_detection_baselines.cli import (
     _unique_preserve_order,
     _write_csv,
     export_results,
+    main,
     render_console_tables,
 )
-from text_detection_baselines.datasets import DatasetSpec
+from text_detection_baselines.datasets import DatasetSpec, register_file_dataset
 
 
 def test_resolve_selection_uses_defaults_when_not_all():
@@ -496,3 +498,197 @@ def test_raise_for_unavailable_dataset_reports_other_datasets_plainly(tmp_path):
         _raise_for_unavailable_dataset(spec)
 
     assert "--register-file-dataset" in str(exc_info.value)
+
+
+# ---------------------------------------------------------------------------
+# The assembled command
+#
+# These invoke ``main`` in-process, which covers the wiring the helper tests above
+# cannot: that each option is attached to the right validator and param type, and
+# that failures surface as exit codes rather than tracebacks.
+#
+# Keep them cheap. Never pass ``-a``/``--all-models`` here: that selects ``smollm2``,
+# which downloads model weights when built.
+# ---------------------------------------------------------------------------
+
+# Enough rows for both labels to appear in a single category, so ranking metrics are
+# defined and the evaluation exercises a real path rather than a degenerate one.
+_TINY_ROWS = [
+    {"answer": "A short human answer.", "label": "real", "contribution_level": "Mixed"},
+    {
+        "answer": "Another human answer, a little longer than the first one.",
+        "label": "real",
+        "contribution_level": "Mixed",
+    },
+    {
+        "answer": "In conclusion, a balanced approach is essential for all stakeholders.",
+        "label": "fake",
+        "contribution_level": "Mixed",
+    },
+    {
+        "answer": "Furthermore it is important to consider the wider implications here.",
+        "label": "fake",
+        "contribution_level": "Mixed",
+    },
+]
+
+# Narrows the run to a single model without relying on the default model list, which
+# always contributes to the selection alongside any explicit --model.
+_ONE_MODEL = ["--model", "dummy-norm", "--exclude-model", "dummy-raw", "--exclude-model", "length"]
+
+
+@pytest.fixture
+def tiny_dataset(tmp_path):
+    """A four-row dataset file in the loader's default key layout."""
+    path = tmp_path / "tiny.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in _TINY_ROWS), encoding="utf-8")
+    return path
+
+
+def test_cli_help_lists_registered_datasets_and_models(runner):
+    result = runner.invoke(main, ["--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "demo" in result.output
+    assert "length" in result.output
+
+
+def test_cli_rejects_a_target_alpha_outside_the_unit_interval(runner):
+    result = runner.invoke(main, ["--target-alpha", "1.5"])
+
+    assert result.exit_code == 2
+    assert "target-alpha" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("option", "kind"),
+    [
+        ("--dataset", "dataset"),
+        ("--exclude-dataset", "dataset"),
+        ("--model", "model"),
+        ("--exclude-model", "model"),
+    ],
+)
+def test_cli_rejects_unknown_names_on_every_selection_option(runner, option, kind):
+    result = runner.invoke(main, [option, "nope"])
+
+    assert result.exit_code == 2
+    assert f"Unknown {kind}(s): nope" in result.stderr
+
+
+def test_cli_rejects_excluding_every_dataset(runner):
+    result = runner.invoke(main, ["--exclude-dataset", "demo"])
+
+    assert result.exit_code == 2
+    assert "No datasets selected" in result.stderr
+
+
+def test_cli_rejects_excluding_every_model(runner):
+    result = runner.invoke(
+        main,
+        ["--exclude-model", "dummy-norm", "--exclude-model", "dummy-raw", "--exclude-model", "length"],
+    )
+
+    assert result.exit_code == 2
+    assert "No models selected" in result.stderr
+
+
+def test_cli_evaluates_a_runtime_registered_dataset(runner, tmp_path, tiny_dataset, clean_registry):
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"tiny={tiny_dataset}",
+            "--exclude-dataset",
+            "demo",
+            *_ONE_MODEL,
+            "--export",
+            "json",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert set(metrics["overall"]) == {"tiny"}
+    assert metrics["overall"]["tiny"]["dummy-norm"]["n_samples"] == 4
+
+
+def test_cli_rejects_a_malformed_runtime_dataset_registration(runner):
+    result = runner.invoke(main, ["--register-file-dataset", "no-equals-sign"])
+
+    assert result.exit_code == 2
+    assert "NAME=PATH" in result.stderr
+
+
+def test_cli_rejects_a_runtime_dataset_whose_file_is_absent(runner, tmp_path):
+    missing = tmp_path / "absent.jsonl"
+
+    result = runner.invoke(main, ["--register-file-dataset", f"tiny={missing}"])
+
+    assert result.exit_code == 2
+    assert str(missing) in result.stderr
+
+
+def test_cli_writes_every_requested_export_format(runner, tmp_path, tiny_dataset, clean_registry):
+    output_dir = tmp_path / "out"
+
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"tiny={tiny_dataset}",
+            "--exclude-dataset",
+            "demo",
+            *_ONE_MODEL,
+            "--export",
+            "json",
+            "--export",
+            "yaml",
+            "--export",
+            "csv",
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    written = {path.name for path in output_dir.iterdir()}
+    assert written == {"metrics.json", "metrics.yaml", "overall-metrics.csv", "per-category-metrics.csv"}
+
+
+def test_cli_reports_an_unavailable_dataset_without_a_traceback(runner, tmp_path, clean_registry):
+    # Re-registering 'gede' at a path that does not exist is the in-process equivalent
+    # of never having run prepare-gede; the registry is otherwise populated at import.
+    register_file_dataset(name="gede", path=tmp_path / "never-prepared.jsonl")
+
+    result = runner.invoke(main, ["--dataset", "gede", "--exclude-dataset", "demo", *_ONE_MODEL])
+
+    # A ClickException, which click reports as exit 1, not an unhandled FileNotFoundError.
+    assert result.exit_code == 1
+    assert "prepare-gede" in result.stderr
+    assert "Traceback" not in result.output
+
+
+def test_cli_can_run_twice_in_one_process(runner, tmp_path, tiny_dataset, clean_registry):
+    # Regression guard: main() used to call logging.basicConfig, which bound a handler
+    # to the first invocation's stream and silently swallowed later runs' log output.
+    for run in ("first", "second"):
+        result = runner.invoke(
+            main,
+            [
+                "--register-file-dataset",
+                f"tiny={tiny_dataset}",
+                "--exclude-dataset",
+                "demo",
+                *_ONE_MODEL,
+                "--export",
+                "json",
+                "--output-dir",
+                str(tmp_path / run),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / run / "metrics.json").is_file()

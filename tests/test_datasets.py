@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 
 from text_detection_baselines.datasets import (
-    DATASET_REGISTRY,
     GEDE_PATH_ENV_VAR,
     dataset_available,
     get_dataset_spec,
@@ -40,15 +39,7 @@ def _write_records(path: Path, *, as_array: bool) -> Path:
     return path
 
 
-@pytest.fixture
-def clean_registry():
-    """Restore the global dataset registry, so runtime registrations do not leak."""
-    snapshot = dict(DATASET_REGISTRY)
-    try:
-        yield
-    finally:
-        DATASET_REGISTRY.clear()
-        DATASET_REGISTRY.update(snapshot)
+# ``clean_registry`` now lives in conftest.py, shared with the CLI tests.
 
 
 # Both encodings are named explicitly: _read_json_records branches on the first
