@@ -106,7 +106,7 @@ testpaths = ["tests"]
 # The slowest test is the one remaining subprocess smoke test, at about two seconds.
 # This only ever fires on a genuine stall, turning a hung terminal into a test failure
 # with a traceback pointing at where it stalled.
-timeout = 60
+timeout = 15
 
 [tool.mypy]
 files = ["text_detection_baselines/**/*.py"]

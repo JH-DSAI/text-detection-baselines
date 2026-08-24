@@ -26,5 +26,5 @@ looked like they had hung:
   the dataset registry is module-level global state that in-process tests would otherwise leak
   between them.
 
-Tests have a 60-second timeout (`pytest-timeout`), so a genuine stall fails with a traceback
+Tests have a 15-second timeout (`pytest-timeout`), so a genuine stall fails with a traceback
 rather than requiring you to kill the terminal.
