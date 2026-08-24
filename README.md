@@ -1,18 +1,11 @@
 # text-detection-baselines
 
 [![CI](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/ci.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/ci.yml)
-[![Documentation Status](https://readthedocs.org/projects/text-detection-baselines/badge/?version=latest)](https://text-detection-baselines.readthedocs.io/en/latest/?badge=latest)
+<!-- [![Documentation Status](https://readthedocs.org/projects/text-detection-baselines/badge/?version=latest)](https://text-detection-baselines.readthedocs.io/en/latest/?badge=latest) -->
 [![Security](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml/badge.svg)](https://github.com/JH-DSAI/text-detection-baselines/actions/workflows/security.yml)
 <!-- [![DOI](https://zenodo.org/badge/DOI/REPLACE/ME.svg)](https://doi.org/REPLACE/ME) -->
 
 Benchmarking suite for machine text detection.
-
-To do:
-
-* Uncomment and update the DOI above in this README.
-* Import package into [readthedocs](https://readthedocs.org/).
-* Update [.zenodo.json](.zenodo.json). For more details see [zenodo.json docs](https://developers.zenodo.org/#representation) and [zenodo docs on contributors vs creators](https://help.zenodo.org/docs/deposit/describe-records/contributors/).
-* Update quickstart guide below.
 
 ## Quickstart (pixi)
 
@@ -24,7 +17,7 @@ To do:
 pixi run main
 ```
 
-The first run resolves a ~800 MB environment, most of it PyTorch.
+The first run resolves a ~800 MB Python environment, most of it PyTorch.
 
 ## Datasets
 
