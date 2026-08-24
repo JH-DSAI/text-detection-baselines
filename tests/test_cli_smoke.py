@@ -21,7 +21,7 @@ from text_detection_baselines.cli import main
 
 
 def _run(args, env=None):
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(
         [sys.executable, "-m", "text_detection_baselines.cli", *args],
         capture_output=True,
         text=True,
