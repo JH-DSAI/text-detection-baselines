@@ -501,14 +501,8 @@ def test_raise_for_unavailable_dataset_reports_other_datasets_plainly(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# The assembled command
-#
-# These invoke ``main`` in-process, which covers the wiring the helper tests above
-# cannot: that each option is attached to the right validator and param type, and
-# that failures surface as exit codes rather than tracebacks.
-#
-# Keep them cheap. Never pass ``-a``/``--all-models`` here: that selects ``smollm2``,
-# which downloads model weights when built.
+# Keep ``main`` tests (below) cheap. Never pass ``-a``/``--all-models``: that
+# selects ``smollm2``, which downloads model weights when built.
 # ---------------------------------------------------------------------------
 
 # Enough rows for both labels to appear in a single category, so ranking metrics are

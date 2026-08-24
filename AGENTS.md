@@ -1,10 +1,10 @@
 # Instructions for agents
 
-* Include tests where appropriate. Avoid testing the details of CLI output formatting unless that
-  formatting is essential to correctness. The results table is rendered by `rich` and truncates
-  headers at 80 columns, so assertions on its contents are brittle.
-
 ## Testing the CLI
+
+Avoid testing the details of CLI output formatting unless that formatting is essential to
+correctness. The results table is rendered by `rich` and truncates headers at 80 columns, so
+assertions on its contents are brittle.
 
 Use `click.testing.CliRunner` (see the `runner` fixture in `tests/conftest.py`). It exercises the
 real parameter parsing, param types, and exit codes, and a full evaluation run costs about 10ms.

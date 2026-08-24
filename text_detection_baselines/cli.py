@@ -601,6 +601,7 @@ if __name__ == "__main__":
     # Configured at the process entry point rather than inside ``main``: ``basicConfig``
     # binds a handler to the ``sys.stderr`` in effect at the first call and is a no-op
     # afterwards, so calling it from the command body silently sends the logs of every
-    # later in-process invocation to the first caller's stream.
+    # later in-process invocation to the first caller's stream, which causes problems in
+    # testing.
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     main()
