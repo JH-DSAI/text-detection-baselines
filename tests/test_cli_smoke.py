@@ -20,6 +20,16 @@ import sys
 from text_detection_baselines.cli import main
 
 
+def _run(args, env=None):
+    return subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "text_detection_baselines.cli", *args],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
 def test_cli_evaluates_the_default_dataset_and_exports(runner, tmp_path):
     result = runner.invoke(main, ["--export", "json", "--output-dir", str(tmp_path)])
 
