@@ -8,10 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import subprocess
-import sys
 
-import click
 import pytest
 
 from text_detection_baselines.datasets import GEDE_PATH_ENV_VAR
@@ -252,44 +249,76 @@ def test_prepare_gede_rejects_a_database_without_the_gede_schema(tmp_path):
         prepare_gede(source, tmp_path / "gede.jsonl")
 
 
-def _run_cli(args):
-    return subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "text_detection_baselines.prepare_gede", *args],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-
-def test_prepare_gede_cli_converts_and_prints_attribution(tmp_path):
+def test_prepare_gede_cli_converts_and_prints_attribution(tmp_path, runner):
     source = tmp_path / "database.db"
     _build_database(source)
     out = tmp_path / "gede.jsonl"
 
-    result = _run_cli(["--source", str(source), "--out", str(out)])
+    result = runner.invoke(main, ["--source", str(source), "--out", str(out)])
 
-    assert result.returncode == 0, result.stderr
+    assert result.exit_code == 0, result.output
     assert out.is_file()
     assert metadata_path(out).is_file()
+    assert f"Wrote 9 records to {out}" in result.output
     # The licence terms are the point of routing acquisition through the user.
-    assert "CC BY-NC-SA 4.0" in result.stdout
-    assert "BAWE" in result.stdout
+    assert "CC BY-NC-SA 4.0" in result.output
+    assert "BAWE" in result.output
     # Values upstream does not normalize must be surfaced, not silently accepted.
-    assert "task+resource" in result.stdout
+    assert "task+resource" in result.output
 
 
-def test_prepare_gede_cli_reports_blank_text_without_a_traceback(tmp_path):
+def test_prepare_gede_cli_reports_blank_text_without_a_traceback(tmp_path, runner):
     source = tmp_path / "database.db"
     _build_database(source, blank_aae=True)
     out = tmp_path / "gede.jsonl"
 
-    result = _run_cli(["--source", str(source), "--out", str(out)])
+    result = runner.invoke(main, ["--source", str(source), "--out", str(out)])
 
-    assert result.returncode != 0
-    combined = result.stdout + result.stderr
-    assert "add_aae_to_database" in combined
-    assert "Traceback" not in combined
+    # A ClickException, which click reports as exit 1, not an unhandled traceback.
+    assert result.exit_code == 1
+    assert "add_aae_to_database" in result.stderr
+    assert "Traceback" not in result.output
     assert not out.exists()
+
+
+def test_prepare_gede_cli_drops_blank_text_when_allowed(tmp_path, runner):
+    source = tmp_path / "database.db"
+    _build_database(source, blank_aae=True)
+    out = tmp_path / "gede.jsonl"
+
+    result = runner.invoke(main, ["--source", str(source), "--out", str(out), "--allow-missing-aae"])
+
+    assert result.exit_code == 0, result.output
+    assert "Dropped 1 records" in result.output
+    assert len(_read_jsonl(out)) == 8
+
+
+def test_prepare_gede_cli_reports_a_missing_source_without_a_traceback(tmp_path, runner):
+    result = runner.invoke(main, ["--source", str(tmp_path / "absent.db"), "--out", str(tmp_path / "gede.jsonl")])
+
+    assert result.exit_code == 1
+    assert "not found" in result.stderr
+    assert "Traceback" not in result.output
+
+
+def test_prepare_gede_cli_requires_a_source(runner):
+    result = runner.invoke(main, [])
+
+    # A usage error, which click reports as exit 2.
+    assert result.exit_code == 2
+    assert "--source" in result.stderr
+
+
+def test_prepare_gede_cli_defaults_the_output_path(tmp_path, monkeypatch, runner):
+    source = tmp_path / "database.db"
+    _build_database(source)
+    monkeypatch.setenv(GEDE_PATH_ENV_VAR, str(tmp_path / "resolved" / "gede_essays.jsonl"))
+
+    result = runner.invoke(main, ["--source", str(source)])
+
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / "resolved" / "gede_essays.jsonl").is_file()
+    assert "resolved" in result.output
 
 
 def test_prepare_gede_cli_summary_reports_drops_and_disagreements(tmp_path):
@@ -305,33 +334,3 @@ def test_prepare_gede_cli_summary_reports_drops_and_disagreements(tmp_path):
     assert "Dropped 2 records" in summary
     assert "argument-annotated-essays: 2" in summary
     assert "1 records where is_human disagrees" in summary
-
-
-def test_prepare_gede_command_callback_succeeds(tmp_path, capsys):
-    # Calling the command's underlying function rather than click's CliRunner,
-    # which AGENTS.md forbids.
-    source = tmp_path / "database.db"
-    _build_database(source)
-    out = tmp_path / "gede.jsonl"
-
-    main.callback(source=source, out=out, allow_missing_aae=False)
-
-    captured = capsys.readouterr().out
-    assert f"Wrote 9 records to {out}" in captured
-    assert "CC BY-NC-SA 4.0" in captured
-
-
-def test_prepare_gede_command_callback_raises_click_exception(tmp_path):
-    with pytest.raises(click.ClickException, match="not found"):
-        main.callback(source=tmp_path / "absent.db", out=tmp_path / "gede.jsonl", allow_missing_aae=False)
-
-
-def test_prepare_gede_command_callback_defaults_the_output_path(tmp_path, monkeypatch, capsys):
-    source = tmp_path / "database.db"
-    _build_database(source)
-    monkeypatch.setenv(GEDE_PATH_ENV_VAR, str(tmp_path / "resolved" / "gede_essays.jsonl"))
-
-    main.callback(source=source, out=None, allow_missing_aae=False)
-
-    assert (tmp_path / "resolved" / "gede_essays.jsonl").is_file()
-    assert "resolved" in capsys.readouterr().out
