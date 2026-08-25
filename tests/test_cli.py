@@ -540,6 +540,21 @@ def tiny_dataset(tmp_path):
     return path
 
 
+@pytest.fixture
+def renamed_key_dataset(tmp_path):
+    """A dataset file whose text field is ``text`` rather than the schema default ``answer``.
+
+    Deliberately not in the default key layout: ``--text-key`` is what makes it loadable
+    at all, so a run that ignored the flag fails rather than quietly passing.
+    """
+    rows = [
+        {"text": f"sample text number {idx} written for the key-override test", "label": idx % 2} for idx in range(20)
+    ]
+    path = tmp_path / "mine.jsonl"
+    path.write_text("\n".join(json.dumps(row) for row in rows), encoding="utf-8")
+    return path
+
+
 def test_cli_help_lists_registered_datasets_and_models(runner):
     result = runner.invoke(main, ["--help"])
 
@@ -608,6 +623,76 @@ def test_cli_evaluates_a_runtime_registered_dataset(runner, tmp_path, tiny_datas
     metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
     assert set(metrics["overall"]) == {"tiny"}
     assert metrics["overall"]["tiny"]["dummy-norm"]["n_samples"] == 4
+
+
+def test_cli_evaluates_the_default_dataset_and_exports(runner, tmp_path):
+    result = runner.invoke(main, ["--export", "json", "--output-dir", str(tmp_path)])
+
+    assert result.exit_code == 0, result.output
+    metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+
+    assert set(metrics) == {"overall", "per-category"}
+    assert set(metrics["overall"]) == {"demo"}
+    for model_metrics in metrics["overall"]["demo"].values():
+        assert model_metrics["n_samples"] == 200
+        assert model_metrics["n_human"] + model_metrics["n_machine"] == 200
+        assert model_metrics["ood_percent"] > 0
+
+    # Both slice shapes reach the per-category table: a two-class category where the
+    # ranking metrics are defined, and single-label ones where they are not.
+    categories = metrics["per-category"]["demo"]
+    assert categories["Mixed"]["dummy-norm"]["auroc"] is not None
+    assert categories["Human"]["dummy-norm"]["auroc"] is None
+
+
+def test_text_key_applies_to_a_runtime_registered_dataset(runner, tmp_path, renamed_key_dataset, clean_registry):
+    """``--text-key`` must reach the loader for --register-file-dataset entries."""
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"mine={renamed_key_dataset}",
+            # Runtime registrations are always selected; drop the default so this
+            # case exercises the registered file on its own.
+            "--exclude-dataset",
+            "demo",
+            "--text-key",
+            "text",
+            "--export",
+            "json",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert set(metrics["overall"]) == {"mine"}
+    for model_metrics in metrics["overall"]["mine"].values():
+        assert model_metrics["n_samples"] == 20
+
+
+def test_text_key_leaves_built_in_dataset_schemas_alone(runner, tmp_path, renamed_key_dataset, clean_registry):
+    """The flag describes runtime files only; ``demo`` keeps its own ``answer`` field."""
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"mine={renamed_key_dataset}",
+            "--text-key",
+            "text",
+            "--export",
+            "json",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert set(metrics["overall"]) == {"demo", "mine"}
+    for model_metrics in metrics["overall"]["demo"].values():
+        assert model_metrics["n_samples"] == 200
 
 
 def test_cli_rejects_a_malformed_runtime_dataset_registration(runner):
