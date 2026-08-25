@@ -1,6 +1,7 @@
 """Tests for CLI option selection helpers and for the assembled command itself."""
 
 import json
+import logging
 from pathlib import Path
 
 import click
@@ -668,6 +669,15 @@ def test_cli_reports_an_unavailable_dataset_without_a_traceback(runner, tmp_path
 def test_cli_can_run_twice_in_one_process(runner, tmp_path, tiny_dataset, clean_registry):
     # Regression guard: main() used to call logging.basicConfig, which bound a handler
     # to the first invocation's stream and silently swallowed later runs' log output.
+    #
+    # Clearing the root handlers is what makes that observable. basicConfig is a no-op
+    # whenever the root logger already has handlers, and pytest's logging plugin installs
+    # several before any test body runs, so a stray call would otherwise do nothing here
+    # and pass no matter where it lived. The autouse _restore_root_logger fixture in
+    # conftest puts pytest's handlers back afterwards.
+    root = logging.getLogger()
+    root.handlers[:] = []
+
     for run in ("first", "second"):
         result = runner.invoke(
             main,
@@ -686,3 +696,5 @@ def test_cli_can_run_twice_in_one_process(runner, tmp_path, tiny_dataset, clean_
 
         assert result.exit_code == 0, result.output
         assert (tmp_path / run / "metrics.json").is_file()
+
+    assert root.handlers == [], f"the command body configured the root logger: {root.handlers}"

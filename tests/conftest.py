@@ -42,12 +42,19 @@ def clean_registry():
 
 @pytest.fixture(autouse=True)
 def _restore_root_logger():
-    """Restore root logger handlers around every test.
+    """Restore root logger handlers and level around every test.
 
-    ``logging.basicConfig`` binds a handler to the ``sys.stderr`` in effect when it first
-    runs and is a no-op thereafter, so a handler installed under one ``CliRunner``
-    invocation would swallow the logs of every later one. Nothing in the package
-    configures logging outside its ``__main__`` guard; this keeps it that way.
+    Autouse, and load-bearing rather than precautionary: keep it that way.
+    ``test_cli_can_run_twice_in_one_process`` clears the root handlers to check that the
+    CLI's command body does not call ``logging.basicConfig`` -- which would bind a handler
+    to the ``sys.stderr`` of the first ``CliRunner`` invocation and, being a no-op once the
+    root logger has handlers, silently swallow every later invocation's logs. That test
+    relies on this fixture to put pytest's own logging handlers back, and pytest reports
+    nothing about the run without them.
+
+    Clearing is also why the check has to be written that way: pytest installs those
+    handlers before any test body runs, so a stray ``basicConfig`` call would do nothing
+    under the test suite and go unnoticed wherever it lived.
     """
     root = logging.getLogger()
     handlers = list(root.handlers)
