@@ -672,9 +672,9 @@ def test_cli_can_run_twice_in_one_process(runner, tmp_path, tiny_dataset, clean_
     #
     # Clearing the root handlers is what makes that observable. basicConfig is a no-op
     # whenever the root logger already has handlers, and pytest's logging plugin installs
-    # several before any test body runs, so a stray call would otherwise do nothing here
-    # and pass no matter where it lived. The autouse _restore_root_logger fixture in
-    # conftest puts pytest's handlers back afterwards.
+    # several handlers before tests run, so a stray basicConfig call would do nothing
+    # without us clearing root handlers first.  The autouse _restore_root_logger fixture
+    # in conftest puts pytest's logging handlers back afterwards.
     root = logging.getLogger()
     root.handlers[:] = []
 
