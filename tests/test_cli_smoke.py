@@ -54,7 +54,7 @@ def test_cli_reports_an_unprepared_dataset_without_a_traceback(tmp_path):
     env = dict(os.environ)
     env["TDB_GEDE_PATH"] = str(tmp_path / "never-prepared.jsonl")
 
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(
         [sys.executable, "-m", "text_detection_baselines.cli", "--dataset", "gede"],
         capture_output=True,
         text=True,
