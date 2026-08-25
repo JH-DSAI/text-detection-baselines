@@ -249,10 +249,6 @@ def test_prepare_gede_rejects_a_database_without_the_gede_schema(tmp_path):
         prepare_gede(source, tmp_path / "gede.jsonl")
 
 
-# The CLI tests below pass paths as strings, so click's ``Path(path_type=Path)``
-# conversion is exercised rather than bypassed.
-
-
 def test_prepare_gede_cli_converts_and_prints_attribution(tmp_path, runner):
     source = tmp_path / "database.db"
     _build_database(source)

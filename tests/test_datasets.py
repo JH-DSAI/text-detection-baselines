@@ -39,12 +39,9 @@ def _write_records(path: Path, *, as_array: bool) -> Path:
     return path
 
 
-# ``clean_registry`` now lives in conftest.py, shared with the CLI tests.
-
-
 # Both encodings are named explicitly: _read_json_records branches on the first
 # character, not the file extension, and the JSON-array branch has no other caller
-# in the suite now that the array fixtures are gone.
+# in the suite.
 @pytest.mark.parametrize("as_array", [True, False], ids=["json-array", "json-lines"])
 def test_load_file_dataset_reads_both_encodings(tmp_path, as_array):
     path = _write_records(tmp_path / "data.json", as_array=as_array)
