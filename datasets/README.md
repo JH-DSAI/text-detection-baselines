@@ -108,13 +108,11 @@ pixi run main -- --dataset gede
 If `gede` has not been prepared, `--help` marks it `(not prepared)` and selecting it
 fails with the command above rather than a missing-file traceback.
 
-**Note:**  This script does **not** exactly reproduce the GEDE essays JSON corpus compiled by the research team.  Sixty rows have empty questions, and there are other differences as well.  We do not (yet) have an explanation for these discrepancies; they may arise from changes to the data upstream and/or additional postprocessing by the research team.  You can view the differences by copying the researchers' `gede_essays.json` into `datasets/` and doing:
+**Note:**  This script applies hard-coded overrides to patch a few idiosyncrasies in the dataset:
 
-```bash
-diff -u \
-    <(jq -MaS '.[]' datasets/gede_essays.json) \
-    <(jq -MaS . datasets/gede_essays.jsonl)
-```
+- Max tokens for dipper (n/a → 512)
+- Temperature for dipper (n/a → 1)
+- Question text for questions 276, 284, 286, 304 (empty → original question text)
 
 ### What the converter does
 
