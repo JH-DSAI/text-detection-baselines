@@ -1,7 +1,7 @@
 # Prepared datasets. Third-party corpora are never redistributed here; see
 # datasets/README.md.
 datasets/*.jsonl
-datasets/*.meta.json
+datasets/*.json
 
 # Output files
 metrics.json
