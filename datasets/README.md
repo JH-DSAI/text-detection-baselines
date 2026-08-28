@@ -108,11 +108,7 @@ pixi run main -- --dataset gede
 If `gede` has not been prepared, `--help` marks it `(not prepared)` and selecting it
 fails with the command above rather than a missing-file traceback.
 
-**Note:**  This script applies hard-coded overrides to patch a few idiosyncrasies in the dataset:
-
-- Max tokens for dipper (n/a → 512)
-- Temperature for dipper (n/a → 1)
-- Question text for questions 276, 284, 286, 304 (empty → original question text)
+**Note:**  This script applies hard-coded overrides to patch a few questions with missing text in the upstream data.
 
 ### What the converter does
 

@@ -76,9 +76,6 @@ _NOT_APPLICABLE = "n/a"
 _HUMAN_LABEL = "real"
 _MACHINE_LABEL = "fake"
 
-_MACHINE_MAX_TOKENS = 512
-_MACHINE_TEMPERATURE = 1.0
-
 _QUESTION_BACKUPS = {
     276: "Some people think university professors should spend more time doing research while others think they should spend more time educating students. What is your view?",
     284: "Some people are always in a hurry to go places and get things done. Other people prefer to take their time and live life at a slower pace. Which do you prefer? Use specific reasons and examples to support your answer.",
@@ -244,8 +241,8 @@ def _build_record(row: sqlite3.Row, report: GedePrepReport) -> dict[str, Any]:
         "question_id": row["question_id"],
         "question": _QUESTION_BACKUPS.get(row["question_id"], "") if row["question"] is None else str(row["question"]),
         "answer": str(row["answer"]),
-        "temperature": _NOT_APPLICABLE if is_human else _MACHINE_TEMPERATURE,
-        "max_tokens": _NOT_APPLICABLE if is_human else _MACHINE_MAX_TOKENS,
+        "temperature": _NOT_APPLICABLE if row["temperature"] is None else row["temperature"],
+        "max_tokens": _NOT_APPLICABLE if row["max_tokens"] is None else row["max_tokens"],
         "label": _HUMAN_LABEL if is_human else _MACHINE_LABEL,
     }
 
