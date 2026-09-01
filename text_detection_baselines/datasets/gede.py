@@ -76,6 +76,13 @@ _NOT_APPLICABLE = "n/a"
 _HUMAN_LABEL = "real"
 _MACHINE_LABEL = "fake"
 
+_QUESTION_BACKUPS = {
+    276: "Some people think university professors should spend more time doing research while others think they should spend more time educating students. What is your view?",
+    284: "Some people are always in a hurry to go places and get things done. Other people prefer to take their time and live life at a slower pace. Which do you prefer? Use specific reasons and examples to support your answer.",
+    286: "Some people believe that university students should be required to attend classes. Others believe that going to classes should be optional for students. Which point of view do you agree with? Use specific reasons and details to explain your answer.",
+    304: "Some people say that computers have made life easier and more convenient. Other people say that computers have made life more complex and stressful. What is your opinion? Use specific reasons and examples to support your answer.",
+}
+
 #: Field order of the emitted records. Matches the keys this package's dataset
 #: loader defaults to (``answer`` / ``label`` / ``contribution_level``), so a
 #: prepared file needs no key overrides.
@@ -232,7 +239,7 @@ def _build_record(row: sqlite3.Row, report: GedePrepReport) -> dict[str, Any]:
         "contribution_level": category,
         "text_author": text_author,
         "question_id": row["question_id"],
-        "question": "" if row["question"] is None else str(row["question"]),
+        "question": _QUESTION_BACKUPS.get(row["question_id"], "") if row["question"] is None else str(row["question"]),
         "answer": str(row["answer"]),
         "temperature": _NOT_APPLICABLE if row["temperature"] is None else row["temperature"],
         "max_tokens": _NOT_APPLICABLE if row["max_tokens"] is None else row["max_tokens"],
