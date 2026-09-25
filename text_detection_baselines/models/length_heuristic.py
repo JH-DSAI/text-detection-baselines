@@ -15,10 +15,13 @@ class LengthHeuristicStubDetector(StubTextDetector):
     The heuristic assumes that machine-generated texts tend to be longer,
     have lower type-token ratio (more repetition), and use fewer hard
     punctuation marks relative to their length.
+
+    The assignment question is ignored: the heuristic reads surface statistics
+    of each answer alone.
     """
 
-    def predict(self, texts: list[str]) -> StubModelOutput:
-        feats = self._feature_matrix(texts)
+    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+        feats = self._feature_matrix(answers)
         length = feats[:, 0]
         token_count = feats[:, 1]
         punct = feats[:, 2]

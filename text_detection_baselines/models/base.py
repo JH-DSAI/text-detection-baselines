@@ -23,7 +23,7 @@ class StubModelOutput:
 
 
 class StubTextDetector(ABC):
-    """Abstract interface for all stub detector implementations."""
+    """Abstract interface for all detector implementations."""
 
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
         self.model_name = model_name
@@ -32,7 +32,25 @@ class StubTextDetector(ABC):
         self.seed = seed
 
     @abstractmethod
-    def predict(self, texts: list[str]) -> StubModelOutput: ...
+    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+        """Score one assignment's submissions.
+
+        The unit of invocation is an assignment, not a single text: one question
+        with the one-or-more answers written in response to it. This mirrors a
+        real-world application in education in which we might plausibly receive
+        all submissions for an assignment at once, allowing us to utilize batch
+        statistics in prediction.
+
+        Args:
+            question: The assignment prompt the answers respond to. May be empty
+                for datasets that carry no prompt; detectors that need one are
+                responsible for saying so.
+            answers: The submissions to score, one per returned array element.
+
+        Returns:
+            A :class:`StubModelOutput` whose three arrays are parallel to
+            *answers* and in the same order.
+        """
 
     @staticmethod
     def _feature_matrix(texts: list[str]) -> np.ndarray:

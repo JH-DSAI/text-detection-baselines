@@ -9,6 +9,15 @@ from typing import Any
 
 import numpy as np
 
+#: Record field names of the GEDE schema, which the bundled datasets follow.
+#: Single source of truth for the :class:`~text_detection_baselines.datasets.DatasetSpec`
+#: defaults, the ``register_file_dataset`` defaults, and the CLI ``--*-key`` defaults;
+#: re-exported from the package root, which is where callers should import them from.
+DEFAULT_TEXT_KEY = "answer"
+DEFAULT_LABEL_KEY = "label"
+DEFAULT_CATEGORY_KEY = "contribution_level"
+DEFAULT_QUESTION_KEY = "question"
+
 
 @dataclass(frozen=True)
 class FileDatasetBatch:
@@ -21,6 +30,8 @@ class FileDatasetBatch:
     texts: list[str]
     labels: np.ndarray
     categories: np.ndarray
+    questions: np.ndarray
+    """Assignment prompt per sample; empty string where the dataset has none."""
 
     def __len__(self) -> int:
         return len(self.texts)
@@ -66,13 +77,25 @@ def _read_json_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
-def load_file_dataset(path: Path, text_key: str, label_key: str, category_key: str) -> FileDatasetBatch:
-    """Load GEDE-style file datasets from JSONL or JSON-array files."""
+def load_file_dataset(
+    path: Path,
+    text_key: str,
+    label_key: str,
+    category_key: str,
+    question_key: str = DEFAULT_QUESTION_KEY,
+) -> FileDatasetBatch:
+    """Load GEDE-style file datasets from JSONL or JSON-array files.
+
+    Unlike *text_key* and *label_key*, a missing *question_key* does not skip the
+    row: a dataset with no assignment prompt is still evaluable, and loads with
+    an empty question throughout.
+    """
     records = _read_json_records(path)
 
     texts: list[str] = []
     labels: list[int] = []
     categories: list[str] = []
+    questions: list[str] = []
 
     for row in records:
         if text_key not in row or label_key not in row:
@@ -80,6 +103,7 @@ def load_file_dataset(path: Path, text_key: str, label_key: str, category_key: s
         texts.append(str(row[text_key]))
         labels.append(normalize_label(row[label_key]))
         categories.append(str(row.get(category_key, "unknown")))
+        questions.append(str(row.get(question_key, "")))
 
     if not texts:
         raise ValueError(f"No valid samples with required keys in {path}")
@@ -88,4 +112,5 @@ def load_file_dataset(path: Path, text_key: str, label_key: str, category_key: s
         texts=texts,
         labels=np.array(labels, dtype=int),
         categories=np.array(categories, dtype=object),
+        questions=np.array(questions, dtype=object),
     )

@@ -16,6 +16,10 @@ class SmolLMPromptingDetector(StubTextDetector):
     This model computes the conditional probability of two label strings,
     ``" machine"`` and ``" human"``, given an instruction prompt and input
     text. The machine-label probability is used as the detection score.
+
+    The assignment question is ignored: each answer is judged on its own, and
+    the prompt is deliberately left unchanged so this baseline's scores stay
+    comparable across datasets that do and do not carry a question.
     """
 
     def __init__(
@@ -96,11 +100,11 @@ class SmolLMPromptingDetector(StubTextDetector):
         probs /= probs.sum()
         return float(probs[1])
 
-    def predict(self, texts: list[str]) -> StubModelOutput:
-        scores = np.array([self._score_single(text) for text in texts], dtype=float)
+    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+        scores = np.array([self._score_single(text) for text in answers], dtype=float)
         preds = (scores >= 0.5).astype(int)
 
-        lengths = np.array([len(t) for t in texts], dtype=float)
+        lengths = np.array([len(t) for t in answers], dtype=float)
         ood = (np.abs(scores - 0.5) < self.ood_margin) | (lengths < 40)
 
         return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood)

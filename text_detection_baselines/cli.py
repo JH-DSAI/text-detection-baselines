@@ -26,6 +26,7 @@ from rich.table import Table
 from .datasets import (
     DEFAULT_CATEGORY_KEY,
     DEFAULT_LABEL_KEY,
+    DEFAULT_QUESTION_KEY,
     DEFAULT_TEXT_KEY,
     GEDE_PREPARE_HINT,
     DatasetSpec,
@@ -460,6 +461,17 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "datasets keep their own schema."
     ),
 )
+@click.option(
+    "--question-key",
+    type=str,
+    default=DEFAULT_QUESTION_KEY,
+    show_default=True,
+    help=(
+        "Field name for the assignment prompt in datasets registered via "
+        "--register-file-dataset. Models are invoked once per distinct prompt; "
+        "built-in datasets keep their own schema."
+    ),
+)
 @click.option("--seed", type=int, default=7, show_default=True, help="Random seed for model stubs.")
 @click.option(
     "--ood-margin",
@@ -483,6 +495,7 @@ def main(
     text_key: str,
     label_key: str,
     category_key: str,
+    question_key: str,
     seed: int,
     ood_margin: float,
 ) -> None:
@@ -501,6 +514,7 @@ def main(
             text_key=text_key,
             label_key=label_key,
             category_key=category_key,
+            question_key=question_key,
         )
         runtime_dataset_names.append(name)
 
@@ -579,6 +593,7 @@ def main(
                 text_key=dataset.text_key,
                 label_key=dataset.label_key,
                 category_key=dataset.category_key,
+                question_key=dataset.question_key,
             )
             run_results.append((dataset.name, model.model_name, overall, per_cat))
 

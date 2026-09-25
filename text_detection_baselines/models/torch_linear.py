@@ -21,6 +21,9 @@ class TorchLinearStubDetector(StubTextDetector):
     When *normalized_scores* is True the raw logit is passed through a sigmoid
     and scores are in ``[0, 1]``.  When False the raw logit is used directly as
     an unnormalized score.
+
+    The assignment question is ignored: the layer reads surface statistics of
+    each answer alone.
     """
 
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
@@ -35,8 +38,8 @@ class TorchLinearStubDetector(StubTextDetector):
             self._layer.weight[:] = torch.tensor(weights).reshape(self._layer.weight.shape)
             self._layer.bias[:] = torch.tensor([bias])
 
-    def predict(self, texts: list[str]) -> StubModelOutput:
-        feats = self._feature_matrix(texts)
+    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+        feats = self._feature_matrix(answers)
         raw = self._forward(feats)
 
         # ``confidence`` is distance from the decision boundary, so it is *low*

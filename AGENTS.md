@@ -19,8 +19,11 @@ Two rules keep in-process runs fast, and exist because ignoring them once produc
 looked like they had hung:
 
 * **Never pass `-a` / `--all` / `--all-models` in an in-process test.** It selects `smollm2`,
-  which downloads model weights when constructed. Under `CliRunner` the output is captured, so a
-  multi-minute download shows no progress at all. Pass explicit `--model` names instead.
+  which downloads model weights when constructed, and `azure-batch`, which uploads to Azure
+  blob storage and blocks on a remote batch job. Under `CliRunner` the output is captured, so a
+  multi-minute download or a network timeout shows no progress at all. Pass explicit `--model`
+  names instead. `azure-batch` is safe to test only through an injected fake client — see
+  `tests/test_azure_batch_model.py`.
 * **Keep in-process datasets small.** Use a handful of rows written to `tmp_path`, or the bundled
   200-row `demo` dataset. Anything registered at runtime needs the `clean_registry` fixture, since
   the dataset registry is module-level global state that in-process tests would otherwise leak

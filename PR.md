@@ -7,6 +7,8 @@ We have a text detection model hosted on Azure ML as a batch inference endpoint.
 ## Resources
 
 * ML endpoint invocation from app: https://github.com/JH-DSAI/text-detect-batch/blob/543c48480d292d2cc619a1c4d9da576233d42bfe/backend/app/services/azure_batch.py#L169
+* ML endpoint configuration: https://github.com/noa/dsai_detection/blob/0cb0240e496c14bbe65c661ee787482995fc8ba5/src/hopdetect/deploy/azure/templates/pipeline.yaml.j2
+* Pipeline data structures: https://github.com/noa/dsai_detection/blob/main/src/hopdetect/deploy/contract.py
 * Batch scoring function, including verdict creation: https://github.com/noa/dsai_detection/blob/9cb5069301dd6682d6ab2fb612b454896f7dfdcf/src/hopdetect/deploy/driver.py#L402
 * SubmissionResult model definition: https://github.com/noa/dsai_detection/blob/9cb5069301dd6682d6ab2fb612b454896f7dfdcf/src/hopdetect/pipeline/data_model.py#L192
 * SubmissionResult instantiation: https://github.com/noa/dsai_detection/blob/1c87c292c3f1c298d02def1ec622de30792204cc/src/hopdetect/deploy/score.py#L387

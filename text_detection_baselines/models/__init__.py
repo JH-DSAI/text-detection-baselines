@@ -5,12 +5,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .azure_batch import AzureBatchDetector
 from .base import StubModelOutput, StubTextDetector
 from .length_heuristic import LengthHeuristicStubDetector
 from .prompting_smol import SmolLMPromptingDetector
 from .torch_linear import TorchLinearStubDetector
 
 __all__ = [
+    "AzureBatchDetector",
     "build_model",
     "build_stub_model",
     "get_default_model_names",
@@ -96,10 +98,22 @@ def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector
     )
 
 
+def _azure_batch_factory(ood_margin: float, seed: int) -> StubTextDetector:
+    return AzureBatchDetector(
+        model_name="azure-batch",
+        normalized_scores=False,
+        ood_margin=ood_margin,
+        seed=seed,
+    )
+
+
 register_model("dummy-norm", _torch_normalized_factory)
 register_model("dummy-raw", _torch_raw_factory)
 register_model("length", _length_normalized_factory)
 register_model("smollm2", _smollm2_prompting_factory, is_default=False)
+# Not a default: every evaluation costs a remote batch job, and the endpoint
+# needs credentials that a fresh checkout does not have.
+register_model("azure-batch", _azure_batch_factory, is_default=False)
 
 
 def build_stub_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:

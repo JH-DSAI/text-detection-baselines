@@ -55,6 +55,33 @@ def test_load_file_dataset_reads_both_encodings(tmp_path, as_array):
     assert "Human" in set(batch.categories.tolist())
 
 
+def test_load_file_dataset_reads_questions(tmp_path):
+    rows = [dict(row, question=f"Q{index}") for index, row in enumerate(_ROWS)]
+    path = tmp_path / "with-questions.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    batch = load_file_dataset(
+        path,
+        text_key="answer",
+        label_key="label",
+        category_key="contribution_level",
+        question_key="question",
+    )
+
+    assert len(batch.questions) == len(_ROWS)
+    assert batch.questions[0] == "Q0"
+
+
+def test_load_file_dataset_keeps_rows_that_have_no_question(tmp_path):
+    # A dataset with no assignment prompt is still evaluable; only a missing
+    # text or label skips the row.
+    path = _write_records(tmp_path / "data.jsonl", as_array=False)
+    batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+    assert len(batch) == len(_ROWS)
+    assert set(batch.questions.tolist()) == {""}
+
+
 def test_dataset_dispatch_file_type(tmp_path):
     path = _write_records(tmp_path / "data.jsonl", as_array=False)
     batch = load_dataset(

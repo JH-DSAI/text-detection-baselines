@@ -14,9 +14,10 @@ from text_detection_baselines.evaluate import (
     evaluate_predictions,
     load_dataset,
     normalize_label,
+    predict_by_question,
 )
 from text_detection_baselines.models import build_stub_model
-from text_detection_baselines.models.base import StubModelOutput
+from text_detection_baselines.models.base import StubModelOutput, StubTextDetector
 
 
 def _write_jsonl(path, rows):
@@ -229,6 +230,81 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
             "ece",
         ):
             assert key in cat_metrics
+
+
+# ---------------------------------------------------------------------------
+# predict_by_question
+# ---------------------------------------------------------------------------
+
+
+class _RecordingDetector(StubTextDetector):
+    """Detector that records its invocations and scores by answer position."""
+
+    def __init__(self, n_results=None):
+        super().__init__("recording", normalized_scores=False, ood_margin=0.0, seed=0)
+        self.calls = []
+        self._n_results = n_results
+
+    def predict(self, question, answers):
+        self.calls.append((question, list(answers)))
+        n = len(answers) if self._n_results is None else self._n_results
+        scores = np.array([float(len(a)) for a in answers[:n]], dtype=float)
+        return StubModelOutput(
+            scores=scores,
+            predictions=np.zeros(n, dtype=int),
+            ood_flags=np.zeros(n, dtype=bool),
+        )
+
+
+def test_predict_by_question_invokes_once_per_question():
+    model = _RecordingDetector()
+    questions = np.array(["Q1", "Q2", "Q1"], dtype=object)
+
+    predict_by_question(model, questions, ["a", "bb", "ccc"])
+
+    # One call per distinct question, in order of first appearance, with that
+    # question's answers grouped together.
+    assert model.calls == [("Q1", ["a", "ccc"]), ("Q2", ["bb"])]
+
+
+def test_predict_by_question_restores_dataset_order():
+    model = _RecordingDetector()
+    questions = np.array(["Q1", "Q2", "Q1"], dtype=object)
+
+    output = predict_by_question(model, questions, ["a", "bb", "ccc"])
+
+    # Scores are answer lengths, so dataset order is 1, 2, 3 even though the
+    # model saw them grouped as (1, 3), (2).
+    np.testing.assert_allclose(output.scores, [1.0, 2.0, 3.0])
+
+
+def test_predict_by_question_rejects_a_misaligned_result_count():
+    # A remote detector can drop or duplicate records; a silent misalignment
+    # would attribute one submission's verdict to another.
+    model = _RecordingDetector(n_results=1)
+    questions = np.array(["Q1", "Q1"], dtype=object)
+
+    with pytest.raises(ValueError, match="returned 1 scores for 2 answers"):
+        predict_by_question(model, questions, ["a", "bb"])
+
+
+def test_evaluate_model_on_dataset_groups_by_question(tmp_path):
+    rows = [dict(row, question=f"Q{index % 2}") for index, row in enumerate(_SAMPLE_ROWS)]
+    dataset_path = tmp_path / "with-questions.jsonl"
+    _write_jsonl(dataset_path, rows)
+
+    model = _RecordingDetector()
+    evaluate_model_on_dataset(
+        dataset_path=dataset_path,
+        model=model,
+        target_alpha=0.1,
+        text_key="answer",
+        label_key="label",
+        category_key="contribution_level",
+        question_key="question",
+    )
+
+    assert [question for question, _ in model.calls] == ["Q0", "Q1"]
 
 
 # ---------------------------------------------------------------------------

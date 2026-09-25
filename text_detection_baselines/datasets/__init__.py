@@ -7,17 +7,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .file import FileDatasetBatch, load_file_dataset
+from .file import (
+    DEFAULT_CATEGORY_KEY,
+    DEFAULT_LABEL_KEY,
+    DEFAULT_QUESTION_KEY,
+    DEFAULT_TEXT_KEY,
+    FileDatasetBatch,
+    load_file_dataset,
+)
 
-DatasetLoader = Callable[[Path, str, str, str], FileDatasetBatch]
+DatasetLoader = Callable[[Path, str, str, str, str], FileDatasetBatch]
 DATASET_LOADERS: dict[str, DatasetLoader] = {"file": load_file_dataset}
-
-#: Record field names of the GEDE schema, which the bundled datasets follow.
-#: Single source of truth for the :class:`DatasetSpec` defaults, the
-#: :func:`register_file_dataset` defaults, and the CLI ``--*-key`` defaults.
-DEFAULT_TEXT_KEY = "answer"
-DEFAULT_LABEL_KEY = "label"
-DEFAULT_CATEGORY_KEY = "contribution_level"
 
 
 @dataclass(frozen=True)
@@ -36,6 +36,7 @@ class DatasetSpec:
     text_key: str = DEFAULT_TEXT_KEY
     label_key: str = DEFAULT_LABEL_KEY
     category_key: str = DEFAULT_CATEGORY_KEY
+    question_key: str = DEFAULT_QUESTION_KEY
 
 
 DATASET_REGISTRY: dict[str, DatasetSpec] = {}
@@ -54,6 +55,7 @@ def register_dataset(spec: DatasetSpec) -> None:
         text_key=spec.text_key,
         label_key=spec.label_key,
         category_key=spec.category_key,
+        question_key=spec.question_key,
     )
 
 
@@ -64,6 +66,7 @@ def register_file_dataset(
     text_key: str = DEFAULT_TEXT_KEY,
     label_key: str = DEFAULT_LABEL_KEY,
     category_key: str = DEFAULT_CATEGORY_KEY,
+    question_key: str = DEFAULT_QUESTION_KEY,
 ) -> None:
     """Register a file-backed dataset instance."""
     register_dataset(
@@ -74,6 +77,7 @@ def register_file_dataset(
             text_key=text_key,
             label_key=label_key,
             category_key=category_key,
+            question_key=question_key,
         ),
     )
 
@@ -121,13 +125,14 @@ def load_dataset(
     text_key: str,
     label_key: str,
     category_key: str,
+    question_key: str = DEFAULT_QUESTION_KEY,
 ) -> FileDatasetBatch:
     """Load a dataset by type into a reusable batch format."""
     if dataset_type not in DATASET_LOADERS:
         valid = ", ".join(sorted(DATASET_LOADERS))
         raise ValueError(f"Unknown dataset type '{dataset_type}'. Expected one of: {valid}")
     loader = DATASET_LOADERS[dataset_type]
-    return loader(path, text_key, label_key, category_key)
+    return loader(path, text_key, label_key, category_key, question_key)
 
 
 #: Environment variable that overrides where the prepared GEDE file is looked for.
@@ -213,6 +218,7 @@ __all__ = [
     "DATASET_REGISTRY",
     "DEFAULT_CATEGORY_KEY",
     "DEFAULT_LABEL_KEY",
+    "DEFAULT_QUESTION_KEY",
     "DEFAULT_TEXT_KEY",
     "GEDE_FILENAME",
     "GEDE_PATH_ENV_VAR",

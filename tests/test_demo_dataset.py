@@ -17,6 +17,7 @@ from text_detection_baselines.datasets import (
     get_dataset_spec,
     load_dataset,
 )
+from text_detection_baselines.evaluate import predict_by_question
 from text_detection_baselines.models import build_model, get_default_model_names
 from text_detection_baselines.util import find_package_location
 
@@ -63,7 +64,7 @@ def test_demo_dataset_scores_are_not_saturated():
     batch = _demo_batch()
     for name in get_default_model_names():
         model = build_model(name, ood_margin=0.05, seed=7)
-        output = model.predict(batch.texts)
+        output = predict_by_question(model, batch.questions, batch.texts)
         distinct = len(np.unique(output.scores))
         assert distinct > len(batch) // 2, f"{name} produced only {distinct} distinct scores"
         if model.normalized_scores:
@@ -76,6 +77,7 @@ def test_demo_dataset_exercises_ood_flagging():
     # outside its own unit tests, and the OOD% column always reads 0.000.
     batch = _demo_batch()
     for name in get_default_model_names():
-        output = build_model(name, ood_margin=0.05, seed=7).predict(batch.texts)
+        model = build_model(name, ood_margin=0.05, seed=7)
+        output = predict_by_question(model, batch.questions, batch.texts)
         n_ood = int(output.ood_flags.sum())
         assert 0 < n_ood < len(batch), f"{name} flagged {n_ood} of {len(batch)} samples OOD"
