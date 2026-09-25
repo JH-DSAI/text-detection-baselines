@@ -21,11 +21,10 @@ import json
 import re
 import sqlite3
 from collections import Counter
-from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from .. import __version__
 
