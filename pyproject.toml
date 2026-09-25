@@ -84,6 +84,12 @@ exclude = [
 ]
 target-version = "py311"
 
+[tool.ruff.lint]
+# pyupgrade, on top of ruff's defaults: keeps annotations on the builtin generics and
+# `collections.abc` forms that `requires-python = ">=3.11"` allows, rather than the
+# deprecated `typing` aliases (`typing.List`, `typing.Callable`, ...).
+extend-select = ["UP"]
+
 [tool.ruff.lint.pydocstyle] # https://docs.astral.sh/ruff/settings/#lint_pydocstyle_convention
 convention = "google"
 
