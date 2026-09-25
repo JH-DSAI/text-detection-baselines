@@ -51,15 +51,3 @@ class TextDetector(ABC):
             A :class:`ModelOutput` whose three arrays are parallel to
             *answers* and in the same order.
         """
-
-    @staticmethod
-    def _feature_matrix(texts: list[str]) -> np.ndarray:
-        """Deterministic numeric features: char-length, token count, punct count, type-token ratio."""
-        lengths = np.array([len(t) for t in texts], dtype=float)
-        token_counts = np.array([max(len(t.split()), 1) for t in texts], dtype=float)
-        punct = np.array([sum(c in ".,!?:;" for c in t) for t in texts], dtype=float)
-        unique_ratio = np.array(
-            [len(set(t.split())) / max(len(t.split()), 1) for t in texts],
-            dtype=float,
-        )
-        return np.column_stack((lengths, token_counts, punct, unique_ratio))

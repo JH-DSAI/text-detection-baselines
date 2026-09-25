@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from .base import ModelOutput, TextDetector
+from .features import surface_features
 
 
 class LengthHeuristicStubDetector(TextDetector):
@@ -21,7 +22,7 @@ class LengthHeuristicStubDetector(TextDetector):
     """
 
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
-        feats = self._feature_matrix(answers)
+        feats = surface_features(answers)
         length = feats[:, 0]
         token_count = feats[:, 1]
         punct = feats[:, 2]

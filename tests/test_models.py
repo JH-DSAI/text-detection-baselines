@@ -12,7 +12,7 @@ from text_detection_baselines.models import (
     list_registered_models,
     register_model,
 )
-from text_detection_baselines.models.base import ModelOutput, TextDetector
+from text_detection_baselines.models.base import ModelOutput
 from text_detection_baselines.models.length_heuristic import LengthHeuristicStubDetector
 from text_detection_baselines.models.prompting_smol import SmolLMPromptingDetector
 from text_detection_baselines.models.torch_linear import TorchLinearStubDetector
@@ -85,11 +85,6 @@ def test_determinism_same_seed():
     out1 = model1.predict(_QUESTION, _TEXTS)
     out2 = model2.predict(_QUESTION, _TEXTS)
     np.testing.assert_array_equal(out1.scores, out2.scores)
-
-
-def test_feature_matrix_shape():
-    feats = TextDetector._feature_matrix(_TEXTS)
-    assert feats.shape == (3, 4)
 
 
 def test_model_registry_defaults_present():

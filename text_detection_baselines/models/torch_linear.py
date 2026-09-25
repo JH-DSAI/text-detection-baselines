@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 from .base import ModelOutput, TextDetector
+from .features import surface_features
 
 
 class TorchLinearStubDetector(TextDetector):
@@ -39,7 +40,7 @@ class TorchLinearStubDetector(TextDetector):
             self._layer.bias[:] = torch.tensor([bias])
 
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
-        feats = self._feature_matrix(answers)
+        feats = surface_features(answers)
         raw = self._forward(feats)
 
         # ``confidence`` is distance from the decision boundary, so it is *low*
