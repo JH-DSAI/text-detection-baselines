@@ -17,7 +17,7 @@ class LengthHeuristicStubDetector(TextDetector):
     have lower type-token ratio (more repetition), and use fewer hard
     punctuation marks relative to their length.
 
-    The assignment question is ignored: the heuristic reads surface statistics
+    The question is ignored: the heuristic reads surface statistics
     of each answer alone.
     """
 

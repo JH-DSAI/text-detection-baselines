@@ -31,7 +31,7 @@ class FileDatasetBatch:
     labels: np.ndarray
     categories: np.ndarray
     questions: np.ndarray
-    """Assignment prompt per sample; empty string where the dataset has none."""
+    """Question per sample; empty string where the dataset has none."""
 
     def __len__(self) -> int:
         return len(self.texts)
@@ -87,7 +87,7 @@ def load_file_dataset(
     """Load GEDE-style file datasets from JSONL or JSON-array files.
 
     Unlike *text_key* and *label_key*, a missing *question_key* does not skip the
-    row: a dataset with no assignment prompt is still evaluable, and loads with
+    row: a dataset with no question is still evaluable, and loads with
     an empty question throughout.
     """
     records = _read_json_records(path)

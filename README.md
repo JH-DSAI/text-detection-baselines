@@ -69,7 +69,7 @@ The `dummy-*` weights were picked by hand and fit to nothing. Their metrics meas
 the harness, not detection quality, and any apparent skill they show on a dataset is
 an artifact of that dataset's length distribution.
 
-Models are invoked **once per assignment**: one question together with the answers
+Models are invoked **once per question**: one question together with the answers
 written in response to it. This mirrors a real-world educational deployment, which
 plausibly receives all submissions for an assignment at once and can use batch
 statistics in prediction. Rows are grouped by their `--question-key` field, so a

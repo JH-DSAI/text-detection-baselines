@@ -17,7 +17,7 @@ class SmolLMPromptingDetector(TextDetector):
     ``" machine"`` and ``" human"``, given an instruction prompt and input
     text. The machine-label probability is used as the detection score.
 
-    The assignment question is ignored: each answer is judged on its own, and
+    The question is ignored: each answer is judged on its own, and
     the prompt is deliberately left unchanged so this baseline's scores stay
     comparable across datasets that do and do not carry a question.
     """

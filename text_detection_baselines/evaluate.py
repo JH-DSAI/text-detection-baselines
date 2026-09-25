@@ -104,18 +104,18 @@ def predict_by_question(
     questions: np.ndarray,
     answers: list[str],
 ) -> ModelOutput:
-    """Invoke *model* once per assignment and reassemble dataset-order outputs.
+    """Invoke *model* once per question and reassemble dataset-order outputs.
 
-    Detectors are invoked per assignment (see :meth:`TextDetector.predict`),
-    but metrics are computed over the dataset as a whole, so the per-assignment
+    Detectors are invoked per question (see :meth:`TextDetector.predict`),
+    but metrics are computed over the dataset as a whole, so the per-question
     outputs are scattered back into the original row order. Rows are grouped by
     question text -- the value the detector actually receives -- in order of
     first appearance, which keeps a single-question dataset to a single call.
 
     Args:
         model:     The detector to invoke.
-        questions: Assignment prompt per row, parallel to *answers*.
-        answers:   The submissions to score, in dataset order.
+        questions: Question per row, parallel to *answers*.
+        answers:   The answers to score, in dataset order.
 
     Returns:
         One :class:`ModelOutput` covering every row, in dataset order.
@@ -123,7 +123,7 @@ def predict_by_question(
     Raises:
         ValueError: If a call returns a different number of results than the
             answers it was given. Remote detectors can drop or duplicate
-            records, and a silent misalignment would attribute one submission's
+            records, and a silent misalignment would attribute one answer's
             verdict to another.
     """
     groups: dict[str, list[int]] = {}
@@ -239,7 +239,7 @@ def evaluate_model_on_dataset(
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """Run one model against one dataset and return metric dicts.
 
-    The model is invoked once per assignment (:func:`predict_by_question`); the
+    The model is invoked once per question (:func:`predict_by_question`); the
     metrics below are computed over the whole dataset regardless of how it split.
 
     Args:
@@ -249,7 +249,7 @@ def evaluate_model_on_dataset(
         text_key:      Field name for the text to score.
         label_key:     Field name for the ground-truth label.
         category_key:  Field name for the per-category grouping variable.
-        question_key:  Field name for the assignment prompt.
+        question_key:  Field name for the question.
 
     Returns:
         ``(overall_metrics, {category: category_metrics})``.  Neither dict

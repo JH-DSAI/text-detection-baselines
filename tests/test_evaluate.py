@@ -280,7 +280,7 @@ def test_predict_by_question_restores_dataset_order():
 
 def test_predict_by_question_rejects_a_misaligned_result_count():
     # A remote detector can drop or duplicate records; a silent misalignment
-    # would attribute one submission's verdict to another.
+    # would attribute one answer's verdict to another.
     model = _RecordingDetector(n_results=1)
     questions = np.array(["Q1", "Q1"], dtype=object)
 

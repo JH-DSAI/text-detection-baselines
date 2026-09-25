@@ -10,7 +10,7 @@ import numpy as np
 
 @dataclass
 class ModelOutput:
-    """Outputs produced by a detector for one assignment's answers."""
+    """Outputs produced by a detector for one question's answers."""
 
     scores: np.ndarray
     """Continuous detection score; higher → more likely machine-generated."""
@@ -33,19 +33,19 @@ class TextDetector(ABC):
 
     @abstractmethod
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
-        """Score one assignment's submissions.
+        """Score one question's answers.
 
-        The unit of invocation is an assignment, not a single text: one question
+        The unit of invocation is an question, not a single text: one question
         with the one-or-more answers written in response to it. This mirrors a
         real-world application in education in which we might plausibly receive
-        all submissions for an assignment at once, allowing us to utilize batch
+        all answers for an question at once, allowing us to utilize batch
         statistics in prediction.
 
         Args:
-            question: The assignment prompt the answers respond to. May be empty
+            question: The question the answers respond to. May be empty
                 for datasets that carry no prompt; detectors that need one are
                 responsible for saying so.
-            answers: The submissions to score, one per returned array element.
+            answers: The answers to score, one per returned array element.
 
         Returns:
             A :class:`ModelOutput` whose three arrays are parallel to

@@ -467,7 +467,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     default=DEFAULT_QUESTION_KEY,
     show_default=True,
     help=(
-        "Field name for the assignment prompt in datasets registered via "
+        "Field name for the question in datasets registered via "
         "--register-file-dataset. Models are invoked once per distinct prompt; "
         "built-in datasets keep their own schema."
     ),

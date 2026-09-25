@@ -23,7 +23,7 @@ class TorchLinearStubDetector(TextDetector):
     and scores are in ``[0, 1]``.  When False the raw logit is used directly as
     an unnormalized score.
 
-    The assignment question is ignored: the layer reads surface statistics of
+    The question is ignored: the layer reads surface statistics of
     each answer alone.
     """
 
