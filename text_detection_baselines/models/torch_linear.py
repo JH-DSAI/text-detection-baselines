@@ -6,10 +6,10 @@ import numpy as np
 import torch
 from torch import nn
 
-from .base import StubModelOutput, StubTextDetector
+from .base import ModelOutput, TextDetector
 
 
-class TorchLinearStubDetector(StubTextDetector):
+class TorchLinearStubDetector(TextDetector):
     """Dummy detector stub backed by a PyTorch layer with arbitrary weights.
 
     The weights are hard-coded constants chosen by hand and fit to no data, so
@@ -38,7 +38,7 @@ class TorchLinearStubDetector(StubTextDetector):
             self._layer.weight[:] = torch.tensor(weights).reshape(self._layer.weight.shape)
             self._layer.bias[:] = torch.tensor([bias])
 
-    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+    def predict(self, question: str, answers: list[str]) -> ModelOutput:
         feats = self._feature_matrix(answers)
         raw = self._forward(feats)
 
@@ -56,7 +56,7 @@ class TorchLinearStubDetector(StubTextDetector):
 
         # Flagged when the model is unconfident, or the text is too short to judge.
         ood = (confidence < self.ood_margin) | (feats[:, 0] < 40)
-        return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood)
+        return ModelOutput(scores=scores, predictions=preds, ood_flags=ood)
 
     def _forward(self, feats: np.ndarray) -> np.ndarray:
         x = torch.tensor(feats, dtype=torch.float32)

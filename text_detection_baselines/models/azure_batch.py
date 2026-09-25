@@ -17,7 +17,7 @@ at ``1c87c29``, ``SubmissionResult`` schema 1.2):
   explicit ``is_flagged`` boolean).
 * ``decision`` is one of ``Flag for review``, ``No action``, or ``Inconclusive``.
 
-Mapping onto :class:`~.base.StubModelOutput`:
+Mapping onto :class:`~.base.ModelOutput`:
 
 * ``predictions`` -- the record's ``is_flagged``.
 * ``ood_flags`` -- an ``Inconclusive`` decision, i.e. a submission the detector
@@ -43,7 +43,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from .base import StubModelOutput, StubTextDetector
+from .base import ModelOutput, TextDetector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -323,7 +323,7 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
     return records
 
 
-class AzureBatchDetector(StubTextDetector):
+class AzureBatchDetector(TextDetector):
     """Detector that scores submissions via the Azure ML batch endpoint.
 
     One :meth:`predict` call is one endpoint invocation (or one per chunk, when
@@ -382,7 +382,7 @@ class AzureBatchDetector(StubTextDetector):
             self._client = AzureMLBatchClient(self.config)
         return self._client
 
-    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+    def predict(self, question: str, answers: list[str]) -> ModelOutput:
         """Score one assignment's answers on the batch endpoint.
 
         Args:
@@ -403,7 +403,7 @@ class AzureBatchDetector(StubTextDetector):
             )
 
         if not answers:
-            return StubModelOutput(
+            return ModelOutput(
                 scores=np.empty(0, dtype=float),
                 predictions=np.empty(0, dtype=int),
                 ood_flags=np.empty(0, dtype=bool),
@@ -473,7 +473,7 @@ class AzureBatchDetector(StubTextDetector):
                 )
             time.sleep(self.poll_interval_seconds)
 
-    def _to_output(self, records: dict[str, dict[str, Any]], n_answers: int) -> StubModelOutput:
+    def _to_output(self, records: dict[str, dict[str, Any]], n_answers: int) -> ModelOutput:
         """Map verdict records back onto dataset-order arrays.
 
         Raises:
@@ -517,4 +517,4 @@ class AzureBatchDetector(StubTextDetector):
                 f"Endpoint returned no verdict for {len(missing)} of {n_answers} submission(s): {shown}{suffix}",
             )
 
-        return StubModelOutput(scores=scores, predictions=predictions, ood_flags=ood_flags)
+        return ModelOutput(scores=scores, predictions=predictions, ood_flags=ood_flags)

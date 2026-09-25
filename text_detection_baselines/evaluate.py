@@ -35,7 +35,7 @@ from .datasets import DEFAULT_QUESTION_KEY
 from .datasets import load_dataset as load_dataset_batch
 from .datasets.file import normalize_label as normalize_label_value
 from .metrics import run_all_metrics
-from .models.base import StubModelOutput, StubTextDetector
+from .models.base import ModelOutput, TextDetector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -100,13 +100,13 @@ def _base_counts(labels: np.ndarray, tau: float, target_alpha: float) -> dict[st
 
 
 def predict_by_question(
-    model: StubTextDetector,
+    model: TextDetector,
     questions: np.ndarray,
     answers: list[str],
-) -> StubModelOutput:
+) -> ModelOutput:
     """Invoke *model* once per assignment and reassemble dataset-order outputs.
 
-    Detectors are invoked per assignment (see :meth:`StubTextDetector.predict`),
+    Detectors are invoked per assignment (see :meth:`TextDetector.predict`),
     but metrics are computed over the dataset as a whole, so the per-assignment
     outputs are scattered back into the original row order. Rows are grouped by
     question text -- the value the detector actually receives -- in order of
@@ -118,7 +118,7 @@ def predict_by_question(
         answers:   The submissions to score, in dataset order.
 
     Returns:
-        One :class:`StubModelOutput` covering every row, in dataset order.
+        One :class:`ModelOutput` covering every row, in dataset order.
 
     Raises:
         ValueError: If a call returns a different number of results than the
@@ -155,13 +155,13 @@ def predict_by_question(
         predictions[rows] = output.predictions
         ood_flags[rows] = output.ood_flags
 
-    return StubModelOutput(scores=scores, predictions=predictions, ood_flags=ood_flags)
+    return ModelOutput(scores=scores, predictions=predictions, ood_flags=ood_flags)
 
 
 def evaluate_predictions(
     labels: np.ndarray,
     categories: np.ndarray,
-    output: StubModelOutput,
+    output: ModelOutput,
     target_alpha: float,
     normalized_scores: bool,
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -170,7 +170,7 @@ def evaluate_predictions(
     Args:
         labels:           Binary array (0=human, 1=machine).
         categories:       String array of contribution_level per sample.
-        output:           Raw model output from :meth:`StubTextDetector.predict`.
+        output:           Raw model output from :meth:`TextDetector.predict`.
         target_alpha:     Target FPR used to learn the threshold ``tau``.
         normalized_scores: Whether scores are in ``[0, 1]``.
 
@@ -230,7 +230,7 @@ def evaluate_predictions(
 
 def evaluate_model_on_dataset(
     dataset_path: Path,
-    model: StubTextDetector,
+    model: TextDetector,
     target_alpha: float,
     text_key: str,
     label_key: str,
@@ -244,7 +244,7 @@ def evaluate_model_on_dataset(
 
     Args:
         dataset_path:  Path to the JSONL (or JSON array) dataset file.
-        model:         Instantiated stub detector.
+        model:         Instantiated detector.
         target_alpha:  Target FPR for threshold learning.
         text_key:      Field name for the text to score.
         label_key:     Field name for the ground-truth label.

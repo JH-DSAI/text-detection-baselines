@@ -1,4 +1,9 @@
-"""Stub detector models for text detection baselines."""
+"""Detector models for text detection baselines.
+
+Most registered models are stubs -- untrained placeholders that exist to exercise
+the evaluation pipeline -- and say so in their own docstrings. ``azure-batch`` is
+not: it calls a real deployed detector.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .azure_batch import AzureBatchDetector
-from .base import StubModelOutput, StubTextDetector
+from .base import ModelOutput, TextDetector
 from .length_heuristic import LengthHeuristicStubDetector
 from .prompting_smol import SmolLMPromptingDetector
 from .torch_linear import TorchLinearStubDetector
@@ -14,21 +19,20 @@ from .torch_linear import TorchLinearStubDetector
 __all__ = [
     "AzureBatchDetector",
     "build_model",
-    "build_stub_model",
     "get_default_model_names",
     "LengthHeuristicStubDetector",
     "list_registered_models",
     "MODEL_REGISTRY",
+    "ModelOutput",
     "ModelSpec",
     "register_model",
     "SmolLMPromptingDetector",
-    "StubModelOutput",
-    "StubTextDetector",
+    "TextDetector",
     "TorchLinearStubDetector",
 ]
 
 
-ModelFactory = Callable[[float, int], StubTextDetector]
+ModelFactory = Callable[[float, int], TextDetector]
 
 
 @dataclass(frozen=True)
@@ -63,7 +67,7 @@ def get_default_model_names() -> tuple[str, ...]:
     return tuple(spec.name for spec in MODEL_REGISTRY.values() if spec.is_default)
 
 
-def build_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:
+def build_model(model_name: str, ood_margin: float, seed: int) -> TextDetector:
     """Instantiate a registered model by name."""
     key = _canon(model_name)
     if key not in MODEL_REGISTRY:
@@ -72,15 +76,15 @@ def build_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetect
     return MODEL_REGISTRY[key].factory(ood_margin, seed)
 
 
-def _torch_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector:
+def _torch_normalized_factory(ood_margin: float, seed: int) -> TextDetector:
     return TorchLinearStubDetector(model_name="dummy-norm", normalized_scores=True, ood_margin=ood_margin, seed=seed)
 
 
-def _torch_raw_factory(ood_margin: float, seed: int) -> StubTextDetector:
+def _torch_raw_factory(ood_margin: float, seed: int) -> TextDetector:
     return TorchLinearStubDetector(model_name="dummy-raw", normalized_scores=False, ood_margin=ood_margin, seed=seed)
 
 
-def _length_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector:
+def _length_normalized_factory(ood_margin: float, seed: int) -> TextDetector:
     return LengthHeuristicStubDetector(
         model_name="length",
         normalized_scores=True,
@@ -89,7 +93,7 @@ def _length_normalized_factory(ood_margin: float, seed: int) -> StubTextDetector
     )
 
 
-def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector:
+def _smollm2_prompting_factory(ood_margin: float, seed: int) -> TextDetector:
     return SmolLMPromptingDetector(
         model_name="smollm2",
         normalized_scores=True,
@@ -98,7 +102,7 @@ def _smollm2_prompting_factory(ood_margin: float, seed: int) -> StubTextDetector
     )
 
 
-def _azure_batch_factory(ood_margin: float, seed: int) -> StubTextDetector:
+def _azure_batch_factory(ood_margin: float, seed: int) -> TextDetector:
     return AzureBatchDetector(
         model_name="azure-batch",
         normalized_scores=False,
@@ -114,8 +118,3 @@ register_model("smollm2", _smollm2_prompting_factory, is_default=False)
 # Not a default: every evaluation costs a remote batch job, and the endpoint
 # needs credentials that a fresh checkout does not have.
 register_model("azure-batch", _azure_batch_factory, is_default=False)
-
-
-def build_stub_model(model_name: str, ood_margin: float, seed: int) -> StubTextDetector:
-    """Backward-compatible alias for :func:`build_model`."""
-    return build_model(model_name=model_name, ood_margin=ood_margin, seed=seed)

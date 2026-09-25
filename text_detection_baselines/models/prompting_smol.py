@@ -7,10 +7,10 @@ from typing import Any, cast
 import numpy as np
 import torch
 
-from .base import StubModelOutput, StubTextDetector
+from .base import ModelOutput, TextDetector
 
 
-class SmolLMPromptingDetector(StubTextDetector):
+class SmolLMPromptingDetector(TextDetector):
     """Prompt-based detector powered by local HuggingFaceTB/SmolLM2-135M-Instruct.
 
     This model computes the conditional probability of two label strings,
@@ -100,11 +100,11 @@ class SmolLMPromptingDetector(StubTextDetector):
         probs /= probs.sum()
         return float(probs[1])
 
-    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+    def predict(self, question: str, answers: list[str]) -> ModelOutput:
         scores = np.array([self._score_single(text) for text in answers], dtype=float)
         preds = (scores >= 0.5).astype(int)
 
         lengths = np.array([len(t) for t in answers], dtype=float)
         ood = (np.abs(scores - 0.5) < self.ood_margin) | (lengths < 40)
 
-        return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood)
+        return ModelOutput(scores=scores, predictions=preds, ood_flags=ood)

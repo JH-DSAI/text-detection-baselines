@@ -194,7 +194,7 @@ def render_console_tables(tree: dict[str, Any]) -> None:
     overall_rows = _flatten_overall(tree)
     summary = Table(
         title="Text Detection Metrics",
-        caption="All models are stubs. dummy-* use fixed, arbitrary weights fit to nothing.",
+        caption="dummy-* use fixed, arbitrary weights fit to nothing.",
         show_lines=False,
     )
     for col in ("dataset", "model", "AUROC", "AUROC@1%", "AP", "FPR@tau", "TPR@tau", "CalGap", "OOD%", "tau"):

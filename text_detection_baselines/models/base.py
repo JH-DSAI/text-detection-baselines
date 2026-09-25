@@ -1,4 +1,4 @@
-"""Base classes shared by all stub model implementations."""
+"""Base classes shared by every detector implementation."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ import numpy as np
 
 
 @dataclass
-class StubModelOutput:
-    """Outputs produced by a stub detector for a batch of texts."""
+class ModelOutput:
+    """Outputs produced by a detector for one assignment's answers."""
 
     scores: np.ndarray
     """Continuous detection score; higher → more likely machine-generated."""
@@ -22,7 +22,7 @@ class StubModelOutput:
     """True where the sample is flagged as out-of-distribution."""
 
 
-class StubTextDetector(ABC):
+class TextDetector(ABC):
     """Abstract interface for all detector implementations."""
 
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
@@ -32,7 +32,7 @@ class StubTextDetector(ABC):
         self.seed = seed
 
     @abstractmethod
-    def predict(self, question: str, answers: list[str]) -> StubModelOutput:
+    def predict(self, question: str, answers: list[str]) -> ModelOutput:
         """Score one assignment's submissions.
 
         The unit of invocation is an assignment, not a single text: one question
@@ -48,7 +48,7 @@ class StubTextDetector(ABC):
             answers: The submissions to score, one per returned array element.
 
         Returns:
-            A :class:`StubModelOutput` whose three arrays are parallel to
+            A :class:`ModelOutput` whose three arrays are parallel to
             *answers* and in the same order.
         """
 

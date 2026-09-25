@@ -16,8 +16,8 @@ from text_detection_baselines.evaluate import (
     normalize_label,
     predict_by_question,
 )
-from text_detection_baselines.models import build_stub_model
-from text_detection_baselines.models.base import StubModelOutput, StubTextDetector
+from text_detection_baselines.models import build_model
+from text_detection_baselines.models.base import ModelOutput, TextDetector
 
 
 def _write_jsonl(path, rows):
@@ -121,7 +121,7 @@ def _make_output(scores, ood_flags=None):
     scores = np.array(scores, dtype=float)
     ood_flags = np.zeros(len(scores), dtype=bool) if ood_flags is None else np.array(ood_flags, dtype=bool)
     preds = (scores >= 0.5).astype(int)
-    return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood_flags)
+    return ModelOutput(scores=scores, predictions=preds, ood_flags=ood_flags)
 
 
 def test_evaluate_predictions_overall_keys():
@@ -194,7 +194,7 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
     dataset_path = tmp_path / "toy.jsonl"
     _write_jsonl(dataset_path, _SAMPLE_ROWS)
 
-    model = build_stub_model("length", ood_margin=0.01, seed=7)
+    model = build_model("length", ood_margin=0.01, seed=7)
     overall, per_cat = evaluate_model_on_dataset(
         dataset_path=dataset_path,
         model=model,
@@ -237,7 +237,7 @@ def test_evaluate_model_on_dataset_produces_required_metrics(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-class _RecordingDetector(StubTextDetector):
+class _RecordingDetector(TextDetector):
     """Detector that records its invocations and scores by answer position."""
 
     def __init__(self, n_results=None):
@@ -249,7 +249,7 @@ class _RecordingDetector(StubTextDetector):
         self.calls.append((question, list(answers)))
         n = len(answers) if self._n_results is None else self._n_results
         scores = np.array([float(len(a)) for a in answers[:n]], dtype=float)
-        return StubModelOutput(
+        return ModelOutput(
             scores=scores,
             predictions=np.zeros(n, dtype=int),
             ood_flags=np.zeros(n, dtype=bool),

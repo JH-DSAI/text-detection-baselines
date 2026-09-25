@@ -3,7 +3,7 @@
 Every test drives the detector through a fake :class:`BatchEndpointClient`: the
 real one needs credentials and a multi-minute remote job, and what is worth
 testing here is the mapping between the endpoint's verdict records and
-``StubModelOutput``, not the Azure SDK.
+``ModelOutput``, not the Azure SDK.
 """
 
 from __future__ import annotations
