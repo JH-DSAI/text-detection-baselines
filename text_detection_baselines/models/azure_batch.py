@@ -33,15 +33,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
+from pydantic import Field, ValidationError
+from pydantic_core import ErrorDetails
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .base import ModelOutput, TextDetector
 
@@ -64,90 +65,76 @@ ANALYSIS_REPORTS_OUTPUT = "analysis_reports"
 
 
 class MissingConfigurationError(RuntimeError):
-    """Raised when required Azure environment variables are unset."""
+    """Raised when the Azure environment variables are unset or unusable."""
 
 
-@dataclass(frozen=True)
-class AzureBatchConfig:
+class AzureBatchConfig(BaseSettings):
     """Connection settings for the Azure ML batch endpoint.
 
     Field names and defaults mirror the application backend's ``Settings``
     (JH-DSAI/text-detect-batch ``backend/app/config.py``), so a working
     deployment's environment configures this detector unchanged.
+
+    Every field names its environment variable explicitly rather than deriving
+    it: the backend's names share no single prefix (``AZURE_STORAGE_*``,
+    ``AZURE_ML_*``, ``AZURE_BATCH_*``), so there is nothing for ``env_prefix``
+    to strip.
     """
 
-    storage_account_url: str
-    storage_container: str
-    datastore_name: str
-    subscription_id: str
-    resource_group: str
-    workspace_name: str
-    endpoint_name: str
-    pipeline_config_asset: str
-    detection_pool_asset: str
-    default_word_count: int
+    # ``env_ignore_empty`` so an exported-but-blank variable reads as unset,
+    # the way it did before these settings were validated: a required field
+    # then reports as missing rather than reaching Azure as an empty account
+    # URL. ``frozen`` because the detector holds one for the life of a run.
+    model_config = SettingsConfigDict(frozen=True, env_ignore_empty=True, populate_by_name=True)
+
+    storage_account_url: str = Field(validation_alias="AZURE_STORAGE_ACCOUNT_URL")
+    storage_container: str = Field("text-detect-uploads-staging", validation_alias="AZURE_STORAGE_CONTAINER")
+    datastore_name: str = Field(validation_alias="AZURE_DATASTORE_NAME")
+    subscription_id: str = Field(validation_alias="AZURE_ML_SUBSCRIPTION_ID")
+    resource_group: str = Field(validation_alias="AZURE_ML_RESOURCE_GROUP")
+    workspace_name: str = Field(validation_alias="AZURE_ML_WORKSPACE_NAME")
+    endpoint_name: str = Field("text-detection-batch-processing", validation_alias="AZURE_BATCH_ENDPOINT_NAME")
+    pipeline_config_asset: str = Field(
+        "azureml:pipeline_config_yaml:6",
+        validation_alias="AZURE_PIPELINE_CONFIG_ASSET",
+    )
+    detection_pool_asset: str = Field("azureml:detection_pool:1", validation_alias="AZURE_DETECTION_POOL_ASSET")
+    default_word_count: int = Field(300, gt=0, validation_alias="AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT")
 
     #: Blob prefix this package writes under, kept separate from the
     #: application's ``class-<id>/assignment-<id>`` tree.
-    blob_prefix: str = "text-detection-baselines"
-
-    #: Environment variables without a usable default. An endpoint cannot be
-    #: reached without them, so they are checked up front and reported together
-    #: rather than surfacing one at a time as an Azure SDK error.
-    REQUIRED_ENV_VARS = (
-        "AZURE_STORAGE_ACCOUNT_URL",
-        "AZURE_DATASTORE_NAME",
-        "AZURE_ML_SUBSCRIPTION_ID",
-        "AZURE_ML_RESOURCE_GROUP",
-        "AZURE_ML_WORKSPACE_NAME",
-    )
+    blob_prefix: str = Field("text-detection-baselines", validation_alias="AZURE_BLOB_PREFIX")
 
     @classmethod
-    def from_env(cls, env: dict[str, str] | None = None) -> AzureBatchConfig:
+    def from_env(cls) -> AzureBatchConfig:
         """Build a config from environment variables.
-
-        Args:
-            env: Mapping to read instead of :data:`os.environ`, for testing.
 
         Returns:
             A populated :class:`AzureBatchConfig`.
 
         Raises:
-            MissingConfigurationError: If any of :data:`REQUIRED_ENV_VARS` is
-                unset or empty.
+            MissingConfigurationError: If a required variable is unset, or any
+                variable holds a value the field rejects. An endpoint cannot be
+                reached without them, so the whole environment is validated up
+                front and every problem reported together, rather than one
+                surfacing at a time as an Azure SDK error.
         """
-        source = os.environ if env is None else env
-
-        missing = [name for name in cls.REQUIRED_ENV_VARS if not source.get(name)]
-        if missing:
-            raise MissingConfigurationError(
-                "Azure batch endpoint is not configured. Set: " + ", ".join(missing),
-            )
-
-        raw_word_count = source.get("AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT", "300")
         try:
-            word_count = int(raw_word_count)
-        except ValueError as exc:
+            return cls()
+        except ValidationError as exc:
+            problems = ", ".join(f"{_error_variable(error)} ({error['msg'].lower()})" for error in exc.errors())
             raise MissingConfigurationError(
-                f"AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT must be an integer, got {raw_word_count!r}",
+                f"Azure batch endpoint is not configured. Check: {problems}",
             ) from exc
-        if word_count <= 0:
-            raise MissingConfigurationError(
-                f"AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT must be positive, got {word_count}",
-            )
 
-        return cls(
-            storage_account_url=source["AZURE_STORAGE_ACCOUNT_URL"],
-            storage_container=source.get("AZURE_STORAGE_CONTAINER", "text-detect-uploads-staging"),
-            datastore_name=source["AZURE_DATASTORE_NAME"],
-            subscription_id=source["AZURE_ML_SUBSCRIPTION_ID"],
-            resource_group=source["AZURE_ML_RESOURCE_GROUP"],
-            workspace_name=source["AZURE_ML_WORKSPACE_NAME"],
-            endpoint_name=source.get("AZURE_BATCH_ENDPOINT_NAME", "text-detection-batch-processing"),
-            pipeline_config_asset=source.get("AZURE_PIPELINE_CONFIG_ASSET", "azureml:pipeline_config_yaml:6"),
-            detection_pool_asset=source.get("AZURE_DETECTION_POOL_ASSET", "azureml:detection_pool:1"),
-            default_word_count=word_count,
-        )
+
+def _error_variable(error: ErrorDetails) -> str:
+    """Name the environment variable one validation error came from.
+
+    ``loc`` is the alias the value was read under -- i.e. the variable name --
+    for every error :meth:`AzureBatchConfig.from_env` can raise.
+    """
+    return ".".join(str(part) for part in error["loc"]) or "environment"
 
 
 class BatchEndpointClient(Protocol):

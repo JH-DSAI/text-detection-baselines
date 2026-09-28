@@ -117,6 +117,10 @@ timeout = 15
 
 [tool.mypy]
 files = ["text_detection_baselines/**/*.py"]
+# Without the plugin, mypy reads a settings class as an ordinary model and
+# demands every field at the call site, where the point of `AzureBatchConfig()`
+# is that the environment supplies them.
+plugins = ["pydantic.mypy"]
 
 # The azure extra is not installed in the dev environment: the SDKs are large,
 # and the azure-batch model imports them lazily precisely so they stay optional.
@@ -145,6 +149,9 @@ transformers = "~=4.44"
 click = ">=8.3.2,<9"
 pyyaml = ">=6.0.3,<7"
 rich = ">=15.0.0,<16"
+# Only the azure-batch model's settings use this, but `models/__init__.py`
+# imports that module eagerly, so it cannot live in the optional azure feature.
+pydantic-settings = ">=2.6,<3"
 
 [tool.pixi.pypi-dependencies]
 text-detection-baselines = { path = ".", editable = true }

@@ -106,7 +106,14 @@ Required: `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_DATASTORE_NAME`,
 `AZURE_ML_SUBSCRIPTION_ID`, `AZURE_ML_RESOURCE_GROUP`, `AZURE_ML_WORKSPACE_NAME`.
 Optional, defaulting to the backend's own values: `AZURE_STORAGE_CONTAINER`,
 `AZURE_BATCH_ENDPOINT_NAME`, `AZURE_PIPELINE_CONFIG_ASSET`,
-`AZURE_DETECTION_POOL_ASSET`, `AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT`.
+`AZURE_DETECTION_POOL_ASSET`, `AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT`. Also
+optional is `AZURE_BLOB_PREFIX`, the container prefix this package uploads
+under, which defaults to `text-detection-baselines` to stay clear of the
+application's own tree.
+
+The whole environment is read and validated at once, on the first call that
+needs it, so a misconfiguration is reported as a single list of problems rather
+than as an Azure SDK error several minutes in.
 
 ## Metrics
 

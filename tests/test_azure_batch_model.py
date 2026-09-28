@@ -9,6 +9,7 @@ testing here is the mapping between the endpoint's verdict records and
 from __future__ import annotations
 
 import json
+import os
 
 import numpy as np
 import pytest
@@ -30,6 +31,19 @@ _ENV = {
 }
 
 _QUESTION = "Should children be taught to compete or to co-operate?"
+
+
+@pytest.fixture(autouse=True)
+def _no_ambient_azure_env(monkeypatch):
+    """Hide the developer's own ``AZURE_*`` variables from every test.
+
+    :class:`AzureBatchConfig` reads the process environment, so without this a
+    machine configured to reach a real endpoint would silently supply values
+    the tests expect to be absent -- or override the defaults they assert on.
+    """
+    for name in list(os.environ):
+        if name.startswith("AZURE_"):
+            monkeypatch.delenv(name)
 
 
 def _record(submission_id, decision, *, score=0.9, tau=0.7, is_flagged=None, inconclusive_reason=None):
@@ -69,13 +83,25 @@ class FakeClient:
         return self.records
 
 
+def _config(**overrides):
+    """A config built by field name, so no environment is involved."""
+    return AzureBatchConfig(
+        storage_account_url="https://example.blob.core.windows.net",
+        datastore_name="workspaceblobstore",
+        subscription_id="sub-1",
+        resource_group="rg-1",
+        workspace_name="ws-1",
+        **overrides,
+    )
+
+
 def _detector(client, **kwargs):
     return AzureBatchDetector(
         model_name="azure-batch",
         normalized_scores=False,
         ood_margin=0.08,
         seed=7,
-        config=AzureBatchConfig.from_env(_ENV),
+        config=_config(),
         client=client,
         poll_interval_seconds=0.0,
         **kwargs,
@@ -87,8 +113,13 @@ def _detector(client, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def test_config_from_env_applies_application_defaults():
-    config = AzureBatchConfig.from_env(_ENV)
+def test_config_from_env_reads_the_backend_variable_names(monkeypatch):
+    for name, value in _ENV.items():
+        monkeypatch.setenv(name, value)
+
+    config = AzureBatchConfig.from_env()
+
+    assert config.subscription_id == "sub-1"
     # Defaults are the application backend's, so a working deployment's
     # environment configures this detector unchanged.
     assert config.endpoint_name == "text-detection-batch-processing"
@@ -96,18 +127,43 @@ def test_config_from_env_applies_application_defaults():
     assert config.default_word_count == 300
 
 
-def test_config_from_env_reports_every_missing_variable_at_once():
+def test_config_from_env_reports_every_missing_variable_at_once(monkeypatch):
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_URL", "https://example.blob.core.windows.net")
+
     with pytest.raises(MissingConfigurationError) as excinfo:
-        AzureBatchConfig.from_env({"AZURE_STORAGE_ACCOUNT_URL": "https://example.blob.core.windows.net"})
+        AzureBatchConfig.from_env()
+
     message = str(excinfo.value)
     assert "AZURE_ML_SUBSCRIPTION_ID" in message
     assert "AZURE_DATASTORE_NAME" in message
     assert "AZURE_STORAGE_ACCOUNT_URL" not in message
 
 
-def test_config_rejects_non_positive_word_count():
-    with pytest.raises(MissingConfigurationError, match="must be positive"):
-        AzureBatchConfig.from_env({**_ENV, "AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT": "0"})
+def test_config_from_env_treats_a_blank_variable_as_unset(monkeypatch):
+    for name, value in _ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("AZURE_ML_WORKSPACE_NAME", "")
+
+    with pytest.raises(MissingConfigurationError, match="AZURE_ML_WORKSPACE_NAME"):
+        AzureBatchConfig.from_env()
+
+
+def test_config_rejects_non_positive_word_count(monkeypatch):
+    for name, value in _ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT", "0")
+
+    with pytest.raises(MissingConfigurationError, match="greater than 0"):
+        AzureBatchConfig.from_env()
+
+
+def test_config_rejects_a_non_numeric_word_count(monkeypatch):
+    for name, value in _ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT", "many")
+
+    with pytest.raises(MissingConfigurationError, match="valid integer"):
+        AzureBatchConfig.from_env()
 
 
 def test_detector_is_registered_but_not_a_default():
@@ -117,11 +173,10 @@ def test_detector_is_registered_but_not_a_default():
     assert "azure-batch" not in get_default_model_names()
 
 
-def test_build_model_does_not_touch_the_environment(monkeypatch):
+def test_build_model_does_not_touch_the_environment():
     # Construction must stay cheap and credential-free: the CLI builds every
-    # selected model before any dataset is scored.
-    for name in AzureBatchConfig.REQUIRED_ENV_VARS:
-        monkeypatch.delenv(name, raising=False)
+    # selected model before any dataset is scored. The autouse fixture has
+    # cleared the environment, so a config read here would raise.
     model = build_model("azure-batch", ood_margin=0.05, seed=1)
     assert isinstance(model, AzureBatchDetector)
     assert model.normalized_scores is False
