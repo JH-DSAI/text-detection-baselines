@@ -35,7 +35,6 @@ import json
 import logging
 import time
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -411,8 +410,7 @@ class AzureBatchDetector(TextDetector):
         # Globally unique per invocation: concurrent evaluation runs share the
         # container, and a reused prefix would have one run's job read another
         # run's submissions folder.
-        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-        run_prefix = f"{self.config.blob_prefix}/{stamp}-{uuid.uuid4().hex[:12]}"
+        run_prefix = f"{self.config.blob_prefix}/{uuid.uuid4()}"
 
         submissions = {self._submission_filename(first_index + offset): text for offset, text in enumerate(answers)}
 
