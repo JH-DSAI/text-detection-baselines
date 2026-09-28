@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
-from pydantic import Field, PositiveInt, ValidationError
+from pydantic import PositiveInt, ValidationError
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -62,52 +62,40 @@ _TERMINAL_FAILURE = frozenset({"Failed", "Canceled", "CancelRequested"})
 #: Name of the batch job output holding the per-submission reports.
 ANALYSIS_REPORTS_OUTPUT = "analysis_reports"
 
-#: Prefix shared by every environment variable :class:`AzureBatchConfig` reads.
-ENV_PREFIX = "AZURE_"
-
 
 class MissingConfigurationError(RuntimeError):
     """Raised when the Azure environment variables are unset or unusable."""
 
 
 class AzureBatchConfig(BaseSettings):
-    """Connection settings for the Azure ML batch endpoint."""
+    """Connection settings for the Azure ML batch endpoint.
 
-    # Fields are the backend's variable names minus :data:`ENV_PREFIX`, matched
-    # case insensitively, so most need no binding of their own. The exceptions
-    # are the three that name the Azure ML workspace: ``AZURE_ML_`` is the
-    # product's name, not a qualifier on the setting, so those spell their
-    # variable out rather than carrying an ``ml_`` no reader here needs.
-    # ``env_ignore_empty`` so an exported-but-blank variable reads as unset:
-    # a required field then reports as missing rather than reaching Azure as
-    # an empty account URL. ``frozen`` because the detector holds one for
-    # the life of a run. ``populate_by_name`` so an aliased field can still be
-    # set by its own name in code; the cost is that AZURE_SUBSCRIPTION_ID and
-    # friends are then read too, below the spellings the backend actually uses.
-    model_config = SettingsConfigDict(
-        env_prefix=ENV_PREFIX,
-        frozen=True,
-        env_ignore_empty=True,
-        populate_by_name=True,
-    )
+    Field names are the application backend's environment variable names, which
+    pydantic-settings matches case insensitively.
+    """
 
-    storage_account_url: str
-    storage_container: str = "text-detect-uploads-staging"
-    datastore_name: str
-    subscription_id: str = Field(validation_alias="AZURE_ML_SUBSCRIPTION_ID")
-    resource_group: str = Field(validation_alias="AZURE_ML_RESOURCE_GROUP")
-    workspace_name: str = Field(validation_alias="AZURE_ML_WORKSPACE_NAME")
-    batch_endpoint_name: str = "text-detection-batch-processing"
+    # ``frozen`` because the detector holds one config for the life of a run.
+    # ``env_ignore_empty`` so an exported-but-blank variable reads as unset and
+    # reports as missing, rather than reaching Azure as an empty account URL.
+    model_config = SettingsConfigDict(frozen=True, env_ignore_empty=True)
+
+    azure_storage_account_url: str
+    azure_storage_container: str = "text-detect-uploads-staging"
+    azure_datastore_name: str
+    azure_ml_subscription_id: str
+    azure_ml_resource_group: str
+    azure_ml_workspace_name: str
+    azure_batch_endpoint_name: str = "text-detection-batch-processing"
     # Required pinned Data Assets for the detection pipeline (AzureML disallows
     # defaults on data inputs, so these are attached explicitly on every invoke).
-    pipeline_config_asset: str = "azureml:pipeline_config_yaml:6"
-    detection_pool_asset: str = "azureml:detection_pool:1"
+    azure_pipeline_config_asset: str = "azureml:pipeline_config_yaml:6"
+    azure_detection_pool_asset: str = "azureml:detection_pool:1"
     # Fallback word count for the assignment JSON. The backend's own comment
     # marks it "must be > 0"; here the constraint is enforced.
-    assignment_default_word_count: PositiveInt = 300
+    azure_assignment_default_word_count: PositiveInt = 300
     # Blob prefix this package writes under, kept separate from the
     # application's ``class-<id>/assignment-<id>`` tree.
-    blob_prefix: str = "text-detection-baselines"
+    azure_blob_prefix: str = "text-detection-baselines"
 
     @classmethod
     def from_env(cls) -> AzureBatchConfig:
@@ -133,16 +121,8 @@ class AzureBatchConfig(BaseSettings):
 
 
 def _error_variable(error: ErrorDetails) -> str:
-    """Name the environment variable one validation error came from.
-
-    ``loc`` is whatever the value was looked up under: an aliased field's own
-    variable, or a plain field's name, which needs the prefix put back. Either
-    way the message names what the reader has to go and set.
-    """
-    field = ".".join(str(part) for part in error["loc"]).upper()
-    if not field:
-        return "environment"
-    return field if field.startswith(ENV_PREFIX) else f"{ENV_PREFIX}{field}"
+    """Name the environment variable one validation error came from."""
+    return ".".join(str(part) for part in error["loc"]).upper() or "environment"
 
 
 class BatchEndpointClient(Protocol):
@@ -194,9 +174,9 @@ class AzureMLBatchClient:
 
             self._ml_client = MLClient(
                 self._credential(),
-                subscription_id=self.config.subscription_id,
-                resource_group_name=self.config.resource_group,
-                workspace_name=self.config.workspace_name,
+                subscription_id=self.config.azure_ml_subscription_id,
+                resource_group_name=self.config.azure_ml_resource_group,
+                workspace_name=self.config.azure_ml_workspace_name,
             )
         return self._ml_client
 
@@ -205,7 +185,7 @@ class AzureMLBatchClient:
             from azure.storage.blob import BlobServiceClient
 
             self._blob_service = BlobServiceClient(
-                account_url=self.config.storage_account_url,
+                account_url=self.config.azure_storage_account_url,
                 credential=self._credential(),
             )
         return self._blob_service
@@ -223,7 +203,7 @@ class AzureMLBatchClient:
         # A datastore URI rather than a raw blob URL: the pipeline runs inside
         # the Azure ML workspace, which cannot authenticate against the blob
         # API directly. Same reasoning as the application backend's _blob_uri.
-        return f"azureml://datastores/{self.config.datastore_name}/paths/{blob_path}"
+        return f"azureml://datastores/{self.config.azure_datastore_name}/paths/{blob_path}"
 
     # -- BatchEndpointClient ------------------------------------------------
 
@@ -231,7 +211,7 @@ class AzureMLBatchClient:
         """Upload the assignment and its answers, then invoke the endpoint."""
         from azure.ai.ml import Input
 
-        container = self._blob().get_container_client(self.config.storage_container)
+        container = self._blob().get_container_client(self.config.azure_storage_container)
 
         submissions_prefix = f"{run_prefix}/submissions"
         for filename, text in answers.items():
@@ -254,12 +234,12 @@ class AzureMLBatchClient:
         )
 
         job = self._ml().batch_endpoints.invoke(
-            endpoint_name=self.config.batch_endpoint_name,
+            endpoint_name=self.config.azure_batch_endpoint_name,
             inputs={
                 "student_assignments_dir": Input(type="uri_folder", path=self._input_uri(submissions_prefix)),
                 "assignment_json_file": Input(type="uri_file", path=self._input_uri(assignment_path)),
-                "pipeline_config_file": Input(type="uri_file", path=self.config.pipeline_config_asset),
-                "detection_pool": Input(type="uri_folder", path=self.config.detection_pool_asset),
+                "pipeline_config_file": Input(type="uri_file", path=self.config.azure_pipeline_config_asset),
+                "detection_pool": Input(type="uri_folder", path=self.config.azure_detection_pool_asset),
             },
         )
         return str(job.name)
@@ -419,15 +399,15 @@ class AzureBatchDetector(TextDetector):
         # Globally unique per invocation: concurrent evaluation runs share the
         # container, and a reused prefix would have one run's job read another
         # run's submissions folder.
-        run_prefix = f"{self.config.blob_prefix}/{uuid.uuid4()}"
+        run_prefix = f"{self.config.azure_blob_prefix}/{uuid.uuid4()}"
 
         submissions = {self._submission_filename(first_index + offset): text for offset, text in enumerate(answers)}
 
-        LOGGER.info("Submitting %d answer(s) to endpoint %s", len(submissions), self.config.batch_endpoint_name)
+        LOGGER.info("Submitting %d answer(s) to endpoint %s", len(submissions), self.config.azure_batch_endpoint_name)
         job_name = client.submit(
             run_prefix=run_prefix,
             question=question,
-            word_count=self.config.assignment_default_word_count,
+            word_count=self.config.azure_assignment_default_word_count,
             answers=submissions,
         )
         LOGGER.info("Batch job %s submitted; polling every %.0fs", job_name, self.poll_interval_seconds)
