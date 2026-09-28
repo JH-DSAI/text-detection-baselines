@@ -85,7 +85,14 @@ class FakeClient:
 
 def _config(**overrides):
     """A config built directly, so no environment is involved."""
-    return AzureBatchConfig(**{**_ENV, **overrides})
+    return AzureBatchConfig(
+        storage_account_url="https://example.blob.core.windows.net",
+        datastore_name="workspaceblobstore",
+        ml_subscription_id="sub-1",
+        ml_resource_group="rg-1",
+        ml_workspace_name="ws-1",
+        **overrides,
+    )
 
 
 def _detector(client, **kwargs):
@@ -112,12 +119,14 @@ def test_config_from_env_reads_the_backend_variable_names(monkeypatch):
 
     config = AzureBatchConfig.from_env()
 
-    assert config.AZURE_ML_SUBSCRIPTION_ID == "sub-1"
+    # The fields are lower case, but it is the backend's own variable names
+    # that configure them.
+    assert config.ml_subscription_id == "sub-1"
     # Defaults are the application backend's, so a working deployment's
     # environment configures this detector unchanged.
-    assert config.AZURE_BATCH_ENDPOINT_NAME == "text-detection-batch-processing"
-    assert config.AZURE_STORAGE_CONTAINER == "text-detect-uploads-staging"
-    assert config.AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT == 300
+    assert config.batch_endpoint_name == "text-detection-batch-processing"
+    assert config.storage_container == "text-detect-uploads-staging"
+    assert config.assignment_default_word_count == 300
 
 
 def test_config_from_env_reports_every_missing_variable_at_once(monkeypatch):
