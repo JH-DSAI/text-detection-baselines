@@ -88,9 +88,9 @@ def _config(**overrides):
     return AzureBatchConfig(
         storage_account_url="https://example.blob.core.windows.net",
         datastore_name="workspaceblobstore",
-        ml_subscription_id="sub-1",
-        ml_resource_group="rg-1",
-        ml_workspace_name="ws-1",
+        subscription_id="sub-1",
+        resource_group="rg-1",
+        workspace_name="ws-1",
         **overrides,
     )
 
@@ -121,7 +121,7 @@ def test_config_from_env_reads_the_backend_variable_names(monkeypatch):
 
     # The fields are lower case, but it is the backend's own variable names
     # that configure them.
-    assert config.ml_subscription_id == "sub-1"
+    assert config.subscription_id == "sub-1"
     # Defaults are the application backend's, so a working deployment's
     # environment configures this detector unchanged.
     assert config.batch_endpoint_name == "text-detection-batch-processing"

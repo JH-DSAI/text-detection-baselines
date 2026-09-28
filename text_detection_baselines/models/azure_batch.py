@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
-from pydantic import PositiveInt, ValidationError
+from pydantic import Field, PositiveInt, ValidationError
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -73,21 +73,30 @@ class MissingConfigurationError(RuntimeError):
 class AzureBatchConfig(BaseSettings):
     """Connection settings for the Azure ML batch endpoint."""
 
-    # Each field is the backend's variable name minus :data:`ENV_PREFIX`, which
-    # is all the binding there is to declare: settings sources match case
-    # insensitively, so ``ml_subscription_id`` reads AZURE_ML_SUBSCRIPTION_ID.
+    # Fields are the backend's variable names minus :data:`ENV_PREFIX`, matched
+    # case insensitively, so most need no binding of their own. The exceptions
+    # are the three that name the Azure ML workspace: ``AZURE_ML_`` is the
+    # product's name, not a qualifier on the setting, so those spell their
+    # variable out rather than carrying an ``ml_`` no reader here needs.
     # ``env_ignore_empty`` so an exported-but-blank variable reads as unset:
     # a required field then reports as missing rather than reaching Azure as
     # an empty account URL. ``frozen`` because the detector holds one for
-    # the life of a run.
-    model_config = SettingsConfigDict(env_prefix=ENV_PREFIX, frozen=True, env_ignore_empty=True)
+    # the life of a run. ``populate_by_name`` so an aliased field can still be
+    # set by its own name in code; the cost is that AZURE_SUBSCRIPTION_ID and
+    # friends are then read too, below the spellings the backend actually uses.
+    model_config = SettingsConfigDict(
+        env_prefix=ENV_PREFIX,
+        frozen=True,
+        env_ignore_empty=True,
+        populate_by_name=True,
+    )
 
     storage_account_url: str
     storage_container: str = "text-detect-uploads-staging"
     datastore_name: str
-    ml_subscription_id: str
-    ml_resource_group: str
-    ml_workspace_name: str
+    subscription_id: str = Field(validation_alias="AZURE_ML_SUBSCRIPTION_ID")
+    resource_group: str = Field(validation_alias="AZURE_ML_RESOURCE_GROUP")
+    workspace_name: str = Field(validation_alias="AZURE_ML_WORKSPACE_NAME")
     batch_endpoint_name: str = "text-detection-batch-processing"
     # Required pinned Data Assets for the detection pipeline (AzureML disallows
     # defaults on data inputs, so these are attached explicitly on every invoke).
@@ -126,11 +135,14 @@ class AzureBatchConfig(BaseSettings):
 def _error_variable(error: ErrorDetails) -> str:
     """Name the environment variable one validation error came from.
 
-    ``loc`` is the field name, so the variable is that name with the prefix
-    put back: what the reader has to go and set, not what the model calls it.
+    ``loc`` is whatever the value was looked up under: an aliased field's own
+    variable, or a plain field's name, which needs the prefix put back. Either
+    way the message names what the reader has to go and set.
     """
-    field = ".".join(str(part) for part in error["loc"])
-    return f"{ENV_PREFIX}{field}".upper() if field else "environment"
+    field = ".".join(str(part) for part in error["loc"]).upper()
+    if not field:
+        return "environment"
+    return field if field.startswith(ENV_PREFIX) else f"{ENV_PREFIX}{field}"
 
 
 class BatchEndpointClient(Protocol):
@@ -182,9 +194,9 @@ class AzureMLBatchClient:
 
             self._ml_client = MLClient(
                 self._credential(),
-                subscription_id=self.config.ml_subscription_id,
-                resource_group_name=self.config.ml_resource_group,
-                workspace_name=self.config.ml_workspace_name,
+                subscription_id=self.config.subscription_id,
+                resource_group_name=self.config.resource_group,
+                workspace_name=self.config.workspace_name,
             )
         return self._ml_client
 
