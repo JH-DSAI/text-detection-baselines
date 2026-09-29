@@ -190,10 +190,10 @@ class AzureMLBatchClient:
     def _credential() -> Any:
         from azure.identity import DefaultAzureCredential
 
-        # Environment credential excluded to match the application backend: on
-        # Azure the user-assigned identity is the one that works, and the
+        # Environment credential excluded would match the application backend:
+        # on Azure the user-assigned identity is the one that works, and the
         # environment attempt fails first and pollutes the log stream.
-        return DefaultAzureCredential(exclude_environment_credential=True)
+        return DefaultAzureCredential()
 
     def _input_uri(self, blob_path: str) -> str:
         # A datastore URI rather than a raw blob URL: the pipeline runs inside
