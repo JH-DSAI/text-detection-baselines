@@ -74,7 +74,7 @@ class AzureBatchConfig(BaseSettings):
     # ``frozen`` because the detector holds one config for the life of a run.
     # ``env_ignore_empty`` so an exported-but-blank variable reads as unset and
     # reports as missing, rather than reaching Azure as an empty account URL.
-    model_config = SettingsConfigDict(frozen=True, env_ignore_empty=True)
+    model_config = SettingsConfigDict(frozen=True, env_ignore_empty=True, env_file=".env")
 
     azure_storage_account_url: str
     azure_storage_container: str = "text-detect-uploads-staging"
