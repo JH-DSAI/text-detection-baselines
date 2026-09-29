@@ -68,8 +68,7 @@ class MissingConfigurationError(RuntimeError):
 
 
 class AzureBatchConfig(BaseSettings):
-    """Connection settings for the Azure ML batch endpoint.
-    """
+    """Connection settings for the Azure ML batch endpoint."""
 
     # ``frozen`` because the detector holds one config for the life of a run.
     # ``env_ignore_empty`` so an exported-but-blank variable reads as unset and
