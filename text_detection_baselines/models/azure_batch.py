@@ -69,9 +69,6 @@ class MissingConfigurationError(RuntimeError):
 
 class AzureBatchConfig(BaseSettings):
     """Connection settings for the Azure ML batch endpoint.
-
-    Field names are the application backend's environment variable names, which
-    pydantic-settings matches case insensitively.
     """
 
     # ``frozen`` because the detector holds one config for the life of a run.
