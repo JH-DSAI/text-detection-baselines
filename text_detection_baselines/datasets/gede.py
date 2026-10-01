@@ -22,7 +22,7 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -288,7 +288,7 @@ def prepare_gede(source: Path, out: Path, *, allow_missing_aae: bool = False) ->
         source=source,
         source_sha256=_sha256(source),
         output=out,
-        prepared_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        prepared_at=datetime.now(UTC).isoformat(timespec="seconds"),
     )
 
     labels: Counter[str] = Counter()

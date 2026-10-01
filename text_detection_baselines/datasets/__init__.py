@@ -7,17 +7,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .file import FileDatasetBatch, load_file_dataset
+from ..settings import ENV_PREFIX, Settings
+from .file import (
+    DEFAULT_CATEGORY_KEY,
+    DEFAULT_LABEL_KEY,
+    DEFAULT_QUESTION_KEY,
+    DEFAULT_TEXT_KEY,
+    FileDatasetBatch,
+    load_file_dataset,
+)
 
-DatasetLoader = Callable[[Path, str, str, str], FileDatasetBatch]
+DatasetLoader = Callable[[Path, str, str, str, str], FileDatasetBatch]
 DATASET_LOADERS: dict[str, DatasetLoader] = {"file": load_file_dataset}
-
-#: Record field names of the GEDE schema, which the bundled datasets follow.
-#: Single source of truth for the :class:`DatasetSpec` defaults, the
-#: :func:`register_file_dataset` defaults, and the CLI ``--*-key`` defaults.
-DEFAULT_TEXT_KEY = "answer"
-DEFAULT_LABEL_KEY = "label"
-DEFAULT_CATEGORY_KEY = "contribution_level"
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class DatasetSpec:
     text_key: str = DEFAULT_TEXT_KEY
     label_key: str = DEFAULT_LABEL_KEY
     category_key: str = DEFAULT_CATEGORY_KEY
+    question_key: str = DEFAULT_QUESTION_KEY
 
 
 DATASET_REGISTRY: dict[str, DatasetSpec] = {}
@@ -54,6 +56,7 @@ def register_dataset(spec: DatasetSpec) -> None:
         text_key=spec.text_key,
         label_key=spec.label_key,
         category_key=spec.category_key,
+        question_key=spec.question_key,
     )
 
 
@@ -64,6 +67,7 @@ def register_file_dataset(
     text_key: str = DEFAULT_TEXT_KEY,
     label_key: str = DEFAULT_LABEL_KEY,
     category_key: str = DEFAULT_CATEGORY_KEY,
+    question_key: str = DEFAULT_QUESTION_KEY,
 ) -> None:
     """Register a file-backed dataset instance."""
     register_dataset(
@@ -74,6 +78,7 @@ def register_file_dataset(
             text_key=text_key,
             label_key=label_key,
             category_key=category_key,
+            question_key=question_key,
         ),
     )
 
@@ -121,17 +126,20 @@ def load_dataset(
     text_key: str,
     label_key: str,
     category_key: str,
+    question_key: str = DEFAULT_QUESTION_KEY,
 ) -> FileDatasetBatch:
     """Load a dataset by type into a reusable batch format."""
     if dataset_type not in DATASET_LOADERS:
         valid = ", ".join(sorted(DATASET_LOADERS))
         raise ValueError(f"Unknown dataset type '{dataset_type}'. Expected one of: {valid}")
     loader = DATASET_LOADERS[dataset_type]
-    return loader(path, text_key, label_key, category_key)
+    return loader(path, text_key, label_key, category_key, question_key)
 
 
 #: Environment variable that overrides where the prepared GEDE file is looked for.
-GEDE_PATH_ENV_VAR = "TDB_GEDE_PATH"
+#: It populates :attr:`~text_detection_baselines.settings.Settings.gede_path`, so it can
+#: also be set in ``.env``.
+GEDE_PATH_ENV_VAR = f"{ENV_PREFIX}GEDE_PATH"
 
 #: File name ``prepare-gede`` writes and the resolver looks for.
 GEDE_FILENAME = "gede_essays.jsonl"
@@ -164,15 +172,18 @@ def _checkout_datasets_dir() -> Path:
 
 
 def _gede_path_override() -> Path | None:
-    override = os.environ.get(GEDE_PATH_ENV_VAR)
-    return Path(override).expanduser() if override else None
+    # Read on every call rather than once at import, so the override follows the
+    # environment the caller is running in.
+    override = Settings().gede_path
+    return override.expanduser() if override is not None else None
 
 
 def resolve_gede_path() -> Path:
     """Resolve where a prepared GEDE dataset is expected to live.
 
-    Checked in order: the :data:`GEDE_PATH_ENV_VAR` override, a prepared file in
-    the source checkout's ``datasets/`` directory, then the user cache directory.
+    Checked in order: the :data:`GEDE_PATH_ENV_VAR` override (from the environment
+    or ``.env``), a prepared file in the source checkout's ``datasets/`` directory,
+    then the user cache directory.
     The returned path is not required to exist -- use :func:`dataset_available`.
     """
     override = _gede_path_override()
@@ -213,6 +224,7 @@ __all__ = [
     "DATASET_REGISTRY",
     "DEFAULT_CATEGORY_KEY",
     "DEFAULT_LABEL_KEY",
+    "DEFAULT_QUESTION_KEY",
     "DEFAULT_TEXT_KEY",
     "GEDE_FILENAME",
     "GEDE_PATH_ENV_VAR",

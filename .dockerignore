@@ -6,6 +6,9 @@
 # into an image. The bundled synthetic demo dataset lives inside the package.
 datasets/
 
+# Local settings, which may name real Azure resources. `.env.example` is kept.
+.env
+
 .pixi
 .tox
 venv

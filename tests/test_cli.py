@@ -672,6 +672,40 @@ def test_text_key_applies_to_a_runtime_registered_dataset(runner, tmp_path, rena
         assert model_metrics["n_samples"] == 20
 
 
+def test_question_key_applies_to_a_runtime_registered_dataset(runner, tmp_path, clean_registry):
+    """``--question-key`` must reach the loader, which is what batches the models."""
+    dataset = tmp_path / "prompted.jsonl"
+    rows = [
+        {"answer": "a human answer that runs on for a while", "label": "real", "prompt": "Q1"},
+        {"answer": "another human answer, also reasonably long", "label": "real", "prompt": "Q2"},
+        {"answer": "in conclusion, a balanced approach is essential", "label": "fake", "prompt": "Q1"},
+        {"answer": "furthermore it is important to consider stakeholders", "label": "fake", "prompt": "Q2"},
+    ]
+    dataset.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"mine={dataset}",
+            "--exclude-dataset",
+            "demo",
+            "--model",
+            "length",
+            "--question-key",
+            "prompt",
+            "--export",
+            "json",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["overall"]["mine"]["length"]["n_samples"] == 4
+
+
 def test_text_key_leaves_built_in_dataset_schemas_alone(runner, tmp_path, renamed_key_dataset, clean_registry):
     """The flag describes runtime files only; ``demo`` keeps its own ``answer`` field."""
     result = runner.invoke(

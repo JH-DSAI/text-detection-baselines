@@ -19,6 +19,17 @@ pixi run main
 
 The first run resolves a ~800 MB Python environment, most of it PyTorch.
 
+## Configuration
+
+Settings are read from `TDB_*` environment variables, falling back to a `.env` file
+in the working directory. [.env.example](.env.example) lists every variable: copy
+it to `.env` and fill in what you need. A variable left blank counts as unset.
+
+| variables | configure |
+| --- | --- |
+| `TDB_GEDE_PATH` | where the `gede` dataset is prepared and looked up; see [datasets/README.md](datasets/README.md) |
+| `TDB_AZURE_BATCH_*` | the `azure-batch` model's endpoint; see [The `azure-batch` model](#the-azure-batch-model) |
+
 ## Datasets
 
 Two datasets
@@ -52,9 +63,10 @@ pixi run main -- --register-file-dataset mydata=/path/to/mydata.jsonl
 
 ## Models
 
-Every model currently registered in [models/](text_detection_baselines/models/) is a **stub**.
-None of them are trained, and none should be treated as a working detector — they
-exist to exercise the evaluation pipeline end to end with realistic-looking outputs.
+Apart from `azure-batch`, every model registered in
+[models/](text_detection_baselines/models/) is a **stub**. None of them are trained,
+and none should be treated as a working detector — they exist to exercise the
+evaluation pipeline end to end with realistic-looking outputs.
 
 | name | what it does |
 | --- | --- |
@@ -62,10 +74,56 @@ exist to exercise the evaluation pipeline end to end with realistic-looking outp
 | `dummy-raw` | Same arbitrary weights, raw logit reported as an unnormalized score. |
 | `length` | Hand-written heuristic: longer texts with lower type-token ratio and less punctuation score as more machine-like. An actual (weak, unvalidated) hypothesis, unlike the `dummy-*` pair. |
 | `smollm2` | Prompts a small local LLM. Not a default; opt in with `--model smollm2`. |
+| `azure-batch` | The real HopDetect detector, via its Azure ML batch endpoint. Not a default; needs credentials and makes remote calls. |
 
 The `dummy-*` weights were picked by hand and fit to nothing. Their metrics measure
 the harness, not detection quality, and any apparent skill they show on a dataset is
 an artifact of that dataset's length distribution.
+
+Models are invoked **once per question**: one question together with the answers
+written in response to it. This mirrors a real-world educational deployment, which
+plausibly receives all submissions for an assignment at once and can use batch
+statistics in prediction. Rows are grouped by their `--question-key` field, so a
+dataset spanning many prompts produces one invocation per prompt. The stub models
+ignore the question and score each answer on its own; `azure-batch` needs it, because
+the pipeline builds a per-assignment support set from the prompt.
+
+### The `azure-batch` model
+
+One `predict` call is one batch job: the answers are uploaded to blob storage, the
+endpoint is invoked, the job is polled to completion, and the per-submission verdicts
+are downloaded. Expect **minutes per invocation**, and a real cost per run.
+
+Verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is a
+window-max cosine judged against `tau`, a *per-document* length-matched conformal
+threshold, so raw scores are not comparable across submissions; the reported score is
+the margin `score - tau`, which is, and which is unbounded rather than in `[0, 1]`.
+
+| harness output | endpoint field |
+| --- | --- |
+| `predictions` | `is_flagged` (decision `Flag for review`) |
+| `ood_flags` | decision `Inconclusive` — a submission the detector declined to assess |
+| `scores` | `score - tau` |
+
+Install the SDKs and run it with:
+
+```bash
+pixi run -e azure main --dataset demo --model azure-batch
+```
+
+Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
+or in `.env` (see [Configuration](#configuration)).
+Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
+`TDB_AZURE_BATCH_DATASTORE_NAME`, `TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`,
+`TDB_AZURE_BATCH_ML_RESOURCE_GROUP`, `TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+See [.env.example](.env.example) for optional variables and defaults.
+
+The whole configuration is read and validated at once, on the first call that
+needs it, so a misconfiguration is reported as a single list of problems rather
+than as an Azure SDK error several minutes in. That includes a
+`TDB_AZURE_BATCH_*` key in `.env` that matches no setting, which is usually a
+typo. A misspelled variable exported in the shell cannot be detected this way
+and is ignored.
 
 ## Metrics
 
