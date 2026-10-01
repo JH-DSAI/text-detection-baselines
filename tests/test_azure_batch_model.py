@@ -9,7 +9,6 @@ testing here is the mapping between the endpoint's verdict records and
 from __future__ import annotations
 
 import json
-import os
 
 import numpy as np
 import pytest
@@ -23,27 +22,14 @@ from text_detection_baselines.models.azure_batch import (
 )
 
 _ENV = {
-    "AZURE_STORAGE_ACCOUNT_URL": "https://example.blob.core.windows.net",
-    "AZURE_DATASTORE_NAME": "workspaceblobstore",
-    "AZURE_ML_SUBSCRIPTION_ID": "sub-1",
-    "AZURE_ML_RESOURCE_GROUP": "rg-1",
-    "AZURE_ML_WORKSPACE_NAME": "ws-1",
+    "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL": "https://example.blob.core.windows.net",
+    "TDB_AZURE_BATCH_DATASTORE_NAME": "workspaceblobstore",
+    "TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID": "sub-1",
+    "TDB_AZURE_BATCH_ML_RESOURCE_GROUP": "rg-1",
+    "TDB_AZURE_BATCH_ML_WORKSPACE_NAME": "ws-1",
 }
 
 _QUESTION = "Should children be taught to compete or to co-operate?"
-
-
-@pytest.fixture(autouse=True)
-def _no_ambient_azure_env(monkeypatch):
-    """Hide the developer's own ``AZURE_*`` variables from every test.
-
-    :class:`AzureBatchConfig` reads the process environment, so without this a
-    machine configured to reach a real endpoint would silently supply values
-    the tests expect to be absent -- or override the defaults they assert on.
-    """
-    for name in list(os.environ):
-        if name.startswith("AZURE_"):
-            monkeypatch.delenv(name)
 
 
 def _record(submission_id, decision, *, score=0.9, tau=0.7, is_flagged=None, inconclusive_reason=None):
@@ -86,11 +72,11 @@ class FakeClient:
 def _config(**overrides):
     """A config built directly, so no environment is involved."""
     return AzureBatchConfig(
-        azure_storage_account_url="https://example.blob.core.windows.net",
-        azure_datastore_name="workspaceblobstore",
-        azure_ml_subscription_id="sub-1",
-        azure_ml_resource_group="rg-1",
-        azure_ml_workspace_name="ws-1",
+        storage_account_url="https://example.blob.core.windows.net",
+        datastore_name="workspaceblobstore",
+        ml_subscription_id="sub-1",
+        ml_resource_group="rg-1",
+        ml_workspace_name="ws-1",
         **overrides,
     )
 
@@ -113,45 +99,43 @@ def _detector(client, **kwargs):
 # ---------------------------------------------------------------------------
 
 
-def test_config_from_env_reads_the_backend_variable_names(monkeypatch):
+def test_config_from_env_reads_the_prefixed_variables(monkeypatch):
     for name, value in _ENV.items():
         monkeypatch.setenv(name, value)
 
     config = AzureBatchConfig.from_env()
 
-    assert config.azure_ml_subscription_id == "sub-1"
-    # Defaults are the application backend's, so a working deployment's
-    # environment configures this detector unchanged.
-    assert config.azure_batch_endpoint_name == "text-detection-batch-processing"
-    assert config.azure_storage_container == "text-detect-uploads-staging"
-    assert config.azure_assignment_default_word_count == 300
+    assert config.ml_subscription_id == "sub-1"
+    assert config.endpoint_name == "text-detection-batch-processing"
+    assert config.storage_container == "text-detect-uploads-staging"
+    assert config.assignment_default_word_count == 300
 
 
 def test_config_from_env_reports_every_missing_variable_at_once(monkeypatch):
-    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT_URL", "https://example.blob.core.windows.net")
+    monkeypatch.setenv("TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL", "https://example.blob.core.windows.net")
 
     with pytest.raises(MissingConfigurationError) as excinfo:
         AzureBatchConfig.from_env()
 
     message = str(excinfo.value)
-    assert "AZURE_ML_SUBSCRIPTION_ID" in message
-    assert "AZURE_DATASTORE_NAME" in message
-    assert "AZURE_STORAGE_ACCOUNT_URL" not in message
+    assert "TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID" in message
+    assert "TDB_AZURE_BATCH_DATASTORE_NAME" in message
+    assert "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL" not in message
 
 
 def test_config_from_env_treats_a_blank_variable_as_unset(monkeypatch):
     for name, value in _ENV.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv("AZURE_ML_WORKSPACE_NAME", "")
+    monkeypatch.setenv("TDB_AZURE_BATCH_ML_WORKSPACE_NAME", "")
 
-    with pytest.raises(MissingConfigurationError, match="AZURE_ML_WORKSPACE_NAME"):
+    with pytest.raises(MissingConfigurationError, match="TDB_AZURE_BATCH_ML_WORKSPACE_NAME"):
         AzureBatchConfig.from_env()
 
 
 def test_config_rejects_non_positive_word_count(monkeypatch):
     for name, value in _ENV.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv("AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT", "0")
+    monkeypatch.setenv("TDB_AZURE_BATCH_ASSIGNMENT_DEFAULT_WORD_COUNT", "0")
 
     with pytest.raises(MissingConfigurationError, match="greater than 0"):
         AzureBatchConfig.from_env()
@@ -160,9 +144,33 @@ def test_config_rejects_non_positive_word_count(monkeypatch):
 def test_config_rejects_a_non_numeric_word_count(monkeypatch):
     for name, value in _ENV.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv("AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT", "many")
+    monkeypatch.setenv("TDB_AZURE_BATCH_ASSIGNMENT_DEFAULT_WORD_COUNT", "many")
 
     with pytest.raises(MissingConfigurationError, match="valid integer"):
+        AzureBatchConfig.from_env()
+
+
+def test_config_from_env_reads_a_dotenv_file_shared_with_other_settings(dotenv):
+    # The package-wide settings and unrelated tooling share the file; neither
+    # their keys nor a blank placeholder may be reported as a problem here.
+    dotenv(
+        *(f"{name}={value}" for name, value in _ENV.items()),
+        "TDB_AZURE_BATCH_STORAGE_CONTAINER=",
+        "TDB_GEDE_PATH=/data/gede_essays.jsonl",
+        "UNRELATED_TOOL_TOKEN=abc",
+    )
+
+    config = AzureBatchConfig.from_env()
+
+    assert config.ml_workspace_name == "ws-1"
+    assert config.storage_container == "text-detect-uploads-staging"
+
+
+def test_config_from_env_reports_an_unrecognised_dotenv_variable(dotenv):
+    # A misspelled key would otherwise leave its field at the default without a word.
+    dotenv(*(f"{name}={value}" for name, value in _ENV.items()), "TDB_AZURE_BATCH_STORAGE_CONTANER=mine")
+
+    with pytest.raises(MissingConfigurationError, match="TDB_AZURE_BATCH_STORAGE_CONTANER"):
         AzureBatchConfig.from_env()
 
 

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from ..settings import ENV_PREFIX, Settings
 from .file import (
     DEFAULT_CATEGORY_KEY,
     DEFAULT_LABEL_KEY,
@@ -136,7 +137,9 @@ def load_dataset(
 
 
 #: Environment variable that overrides where the prepared GEDE file is looked for.
-GEDE_PATH_ENV_VAR = "TDB_GEDE_PATH"
+#: It populates :attr:`~text_detection_baselines.settings.Settings.gede_path`, so it can
+#: also be set in ``.env``.
+GEDE_PATH_ENV_VAR = f"{ENV_PREFIX}GEDE_PATH"
 
 #: File name ``prepare-gede`` writes and the resolver looks for.
 GEDE_FILENAME = "gede_essays.jsonl"
@@ -169,15 +172,18 @@ def _checkout_datasets_dir() -> Path:
 
 
 def _gede_path_override() -> Path | None:
-    override = os.environ.get(GEDE_PATH_ENV_VAR)
-    return Path(override).expanduser() if override else None
+    # Read on every call rather than once at import, so the override follows the
+    # environment the caller is running in.
+    override = Settings().gede_path
+    return override.expanduser() if override is not None else None
 
 
 def resolve_gede_path() -> Path:
     """Resolve where a prepared GEDE dataset is expected to live.
 
-    Checked in order: the :data:`GEDE_PATH_ENV_VAR` override, a prepared file in
-    the source checkout's ``datasets/`` directory, then the user cache directory.
+    Checked in order: the :data:`GEDE_PATH_ENV_VAR` override (from the environment
+    or ``.env``), a prepared file in the source checkout's ``datasets/`` directory,
+    then the user cache directory.
     The returned path is not required to exist -- use :func:`dataset_available`.
     """
     override = _gede_path_override()

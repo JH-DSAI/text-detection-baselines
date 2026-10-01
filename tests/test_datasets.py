@@ -145,6 +145,19 @@ def test_resolve_gede_path_honours_the_environment_override(monkeypatch, tmp_pat
     assert resolve_gede_path() == override
 
 
+def test_resolve_gede_path_reads_the_override_from_dotenv(dotenv, tmp_path):
+    override = tmp_path / "elsewhere" / "gede_essays.jsonl"
+    # The azure-batch keys share this model's prefix; they must be left to their own model.
+    dotenv(f"{GEDE_PATH_ENV_VAR}={override}", "TDB_AZURE_BATCH_ML_WORKSPACE_NAME=ws-1")
+    assert resolve_gede_path() == override
+
+
+def test_resolve_gede_path_treats_a_blank_override_as_unset(monkeypatch):
+    unset = resolve_gede_path()
+    monkeypatch.setenv(GEDE_PATH_ENV_VAR, "")
+    assert resolve_gede_path() == unset
+
+
 def test_resolve_gede_path_falls_back_to_the_cache_directory(monkeypatch, tmp_path):
     monkeypatch.delenv(GEDE_PATH_ENV_VAR, raising=False)
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))

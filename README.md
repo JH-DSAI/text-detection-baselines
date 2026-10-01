@@ -19,6 +19,17 @@ pixi run main
 
 The first run resolves a ~800 MB Python environment, most of it PyTorch.
 
+## Configuration
+
+Settings are read from `TDB_*` environment variables, falling back to a `.env` file
+in the working directory. [.env.example](.env.example) lists every variable: copy
+it to `.env` and fill in what you need. A variable left blank counts as unset.
+
+| variables | configure |
+| --- | --- |
+| `TDB_GEDE_PATH` | where the `gede` dataset is prepared and looked up; see [datasets/README.md](datasets/README.md) |
+| `TDB_AZURE_BATCH_*` | the `azure-batch` model's endpoint; see [The `azure-batch` model](#the-azure-batch-model) |
+
 ## Datasets
 
 Two datasets
@@ -100,20 +111,25 @@ Install the SDKs and run it with:
 pixi run -e azure main --dataset demo --model azure-batch
 ```
 
-Configuration comes from the environment, using the same variable names as the
-application backend, so a working deployment's environment needs no translation.
-Required: `AZURE_STORAGE_ACCOUNT_URL`, `AZURE_DATASTORE_NAME`,
-`AZURE_ML_SUBSCRIPTION_ID`, `AZURE_ML_RESOURCE_GROUP`, `AZURE_ML_WORKSPACE_NAME`.
-Optional, defaulting to the backend's own values: `AZURE_STORAGE_CONTAINER`,
-`AZURE_BATCH_ENDPOINT_NAME`, `AZURE_PIPELINE_CONFIG_ASSET`,
-`AZURE_DETECTION_POOL_ASSET`, `AZURE_ASSIGNMENT_DEFAULT_WORD_COUNT`. Also
-optional is `AZURE_BLOB_PREFIX`, the container prefix this package uploads
-under, which defaults to `text-detection-baselines` to stay clear of the
-application's own tree.
+Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
+or in `.env` (see [Configuration](#configuration)).
+Required: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`, `TDB_AZURE_BATCH_DATASTORE_NAME`,
+`TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`, `TDB_AZURE_BATCH_ML_RESOURCE_GROUP`,
+`TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+Optional, defaulting to the application backend's own values:
+`TDB_AZURE_BATCH_STORAGE_CONTAINER`, `TDB_AZURE_BATCH_ENDPOINT_NAME`,
+`TDB_AZURE_BATCH_PIPELINE_CONFIG_ASSET`, `TDB_AZURE_BATCH_DETECTION_POOL_ASSET`,
+`TDB_AZURE_BATCH_ASSIGNMENT_DEFAULT_WORD_COUNT`. Also optional is
+`TDB_AZURE_BATCH_BLOB_PREFIX`, the container prefix this package uploads under,
+which defaults to `text-detection-baselines` to stay clear of the application's
+own tree.
 
-The whole environment is read and validated at once, on the first call that
+The whole configuration is read and validated at once, on the first call that
 needs it, so a misconfiguration is reported as a single list of problems rather
-than as an Azure SDK error several minutes in.
+than as an Azure SDK error several minutes in. That includes a
+`TDB_AZURE_BATCH_*` key in `.env` that matches no setting, which is usually a
+typo. A misspelled variable exported in the shell cannot be detected this way
+and is ignored.
 
 ## Metrics
 

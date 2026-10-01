@@ -149,9 +149,10 @@ transformers = "~=4.44"
 click = ">=8.3.2,<9"
 pyyaml = ">=6.0.3,<7"
 rich = ">=15.0.0,<16"
-# Only the azure-batch model's settings use this, but `models/__init__.py`
-# imports that module eagerly, so it cannot live in the optional azure feature.
-pydantic-settings = ">=2.6,<3"
+# The package-wide settings (`settings.py`) and the azure-batch model's config
+# are both built on this; 2.14 adds the `dotenv_filtering` that lets them share
+# one `.env` file.
+pydantic-settings = ">=2.14,<3"
 
 [tool.pixi.pypi-dependencies]
 text-detection-baselines = { path = ".", editable = true }
