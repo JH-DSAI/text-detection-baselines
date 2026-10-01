@@ -1,14 +1,18 @@
 """Tests for the Azure ML batch endpoint detector.
 
-Every test drives the detector through a fake :class:`BatchEndpointClient`: the
+The detector tests drive it through a fake :class:`BatchEndpointClient`: the
 real one needs credentials and a multi-minute remote job, and what is worth
-testing here is the mapping between the endpoint's verdict records and
-``ModelOutput``, not the Azure SDK.
+testing there is the mapping between the endpoint's verdict records and
+``ModelOutput``, not the Azure SDK. The real client's own tests stub the SDK
+handles and check only the request it builds.
 """
 
 from __future__ import annotations
 
 import json
+import sys
+from types import ModuleType, SimpleNamespace
+from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
@@ -17,6 +21,7 @@ from text_detection_baselines.models import build_model
 from text_detection_baselines.models.azure_batch import (
     AzureBatchConfig,
     AzureBatchDetector,
+    AzureMLBatchClient,
     MissingConfigurationError,
     parse_analysis_reports,
 )
@@ -291,6 +296,86 @@ def test_job_that_never_finishes_times_out():
     client = FakeClient({}, statuses=["Running"])
     with pytest.raises(RuntimeError, match="did not finish within"):
         _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+
+
+# ---------------------------------------------------------------------------
+# Endpoint request
+# ---------------------------------------------------------------------------
+
+
+def _submit(monkeypatch, config):
+    """Run :meth:`AzureMLBatchClient.submit` against stub SDK handles.
+
+    Returns:
+        The job name, the uploaded blobs as path to bytes, and the keyword
+        arguments the endpoint was invoked with.
+    """
+    # The azure extra is not installed in the dev environment. ``Input`` is a
+    # plain record here, so the test sees exactly what each input was given.
+    azure_ml = ModuleType("azure.ai.ml")
+    azure_ml.Input = SimpleNamespace
+    monkeypatch.setitem(sys.modules, "azure.ai.ml", azure_ml)
+
+    container = MagicMock()
+    blob_service = MagicMock()
+    blob_service.get_container_client.return_value = container
+    ml_client = MagicMock()
+    ml_client.batch_endpoints.invoke.return_value = SimpleNamespace(name="job-1")
+
+    client = AzureMLBatchClient(config)
+    monkeypatch.setattr(client, "_blob", lambda: blob_service)
+    monkeypatch.setattr(client, "_ml", lambda: ml_client)
+
+    job_name = client.submit(
+        run_prefix="run-1",
+        question=_QUESTION,
+        word_count=300,
+        answers={"000000.txt": "first answer", "000001.txt": "second answer"},
+    )
+
+    uploads = {call.kwargs["name"]: call.kwargs["data"] for call in container.upload_blob.call_args_list}
+    return job_name, uploads, ml_client.batch_endpoints.invoke.call_args.kwargs
+
+
+def test_submit_uploads_the_assignment_json_and_answers(monkeypatch):
+    _, uploads, _ = _submit(monkeypatch, _config())
+
+    assert json.loads(uploads.pop("run-1/assignment.json")) == {
+        "essay_question": _QUESTION,
+        "word_count": 300,
+        "class_context_block": "",
+    }
+    assert uploads == {
+        "run-1/submissions/000000.txt": b"first answer",
+        "run-1/submissions/000001.txt": b"second answer",
+    }
+
+
+def test_submit_invokes_the_endpoint_with_every_required_input(monkeypatch):
+    # Non-default endpoint and asset versions, so they are seen to come from
+    # the config. The data assets are pinned on every invoke because AzureML
+    # disallows defaults on pipeline data inputs.
+    config = _config(
+        endpoint_name="custom-endpoint",
+        pipeline_config_asset="azureml:pipeline_config_yaml:9",
+        detection_pool_asset="azureml:detection_pool:2",
+    )
+
+    job_name, _, invocation = _submit(monkeypatch, config)
+
+    assert job_name == "job-1"
+    # The two run inputs point at the paths the answers and assignment were
+    # uploaded to, through the datastore the workspace can authenticate to.
+    datastore = "azureml://datastores/workspaceblobstore/paths"
+    assert invocation == {
+        "endpoint_name": "custom-endpoint",
+        "inputs": {
+            "student_assignments_dir": SimpleNamespace(type="uri_folder", path=f"{datastore}/run-1/submissions"),
+            "assignment_json_file": SimpleNamespace(type="uri_file", path=f"{datastore}/run-1/assignment.json"),
+            "pipeline_config_file": SimpleNamespace(type="uri_file", path="azureml:pipeline_config_yaml:9"),
+            "detection_pool": SimpleNamespace(type="uri_folder", path="azureml:detection_pool:2"),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
