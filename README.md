@@ -113,16 +113,10 @@ pixi run -e azure main --dataset demo --model azure-batch
 
 Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
 or in `.env` (see [Configuration](#configuration)).
-Required: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`, `TDB_AZURE_BATCH_DATASTORE_NAME`,
-`TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`, `TDB_AZURE_BATCH_ML_RESOURCE_GROUP`,
-`TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
-Optional, defaulting to the application backend's own values:
-`TDB_AZURE_BATCH_STORAGE_CONTAINER`, `TDB_AZURE_BATCH_ENDPOINT_NAME`,
-`TDB_AZURE_BATCH_PIPELINE_CONFIG_ASSET`, `TDB_AZURE_BATCH_DETECTION_POOL_ASSET`,
-`TDB_AZURE_BATCH_ASSIGNMENT_DEFAULT_WORD_COUNT`. Also optional is
-`TDB_AZURE_BATCH_BLOB_PREFIX`, the container prefix this package uploads under,
-which defaults to `text-detection-baselines` to stay clear of the application's
-own tree.
+Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
+`TDB_AZURE_BATCH_DATASTORE_NAME`, `TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`,
+`TDB_AZURE_BATCH_ML_RESOURCE_GROUP`, `TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+See [.env.example](.env.example) for optional variables and defaults.
 
 The whole configuration is read and validated at once, on the first call that
 needs it, so a misconfiguration is reported as a single list of problems rather

@@ -55,8 +55,8 @@ NO_ACTION_DECISION = "No action"
 INCONCLUSIVE_DECISION = "Inconclusive"
 
 #: Azure ML job states mapped to the three outcomes this detector cares about.
-#: Mirrors the application backend's ``_STATUS_MAP``; anything unrecognized is
-#: treated as still pending rather than as a failure.
+#: Mirrors ``backend/app/services/azure_batch.py`` ``_STATUS_MAP`` at ``9829695``.
+#: Anything unrecognized is treated as still pending rather than as a failure.
 _TERMINAL_SUCCESS = frozenset({"Completed"})
 _TERMINAL_FAILURE = frozenset({"Failed", "Canceled", "CancelRequested"})
 
@@ -101,8 +101,7 @@ class AzureBatchConfig(BaseSettings):
     # defaults on data inputs, so these are attached explicitly on every invoke).
     pipeline_config_asset: str = "azureml:pipeline_config_yaml:6"
     detection_pool_asset: str = "azureml:detection_pool:1"
-    # Fallback word count for the assignment JSON. The backend's own comment
-    # marks it "must be > 0"; here the constraint is enforced.
+    # Fallback word count for the assignment JSON.
     assignment_default_word_count: PositiveInt = 300
     # Blob prefix this package writes under, kept separate from the
     # application's ``class-<id>/assignment-<id>`` tree.
@@ -213,7 +212,7 @@ class AzureMLBatchClient:
     def _input_uri(self, blob_path: str) -> str:
         # A datastore URI rather than a raw blob URL: the pipeline runs inside
         # the Azure ML workspace, which cannot authenticate against the blob
-        # API directly. Same reasoning as the application backend's _blob_uri.
+        # API directly.
         return f"azureml://datastores/{self.config.datastore_name}/paths/{blob_path}"
 
     # -- BatchEndpointClient ------------------------------------------------
