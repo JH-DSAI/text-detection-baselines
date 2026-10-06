@@ -27,7 +27,7 @@ jobs:
           environments: dev
           cache: true
       - name: Lint
-        run: pixi run -e dev check-style
+        run: pixi run -e dev lint
         shell: bash
 
   test:
