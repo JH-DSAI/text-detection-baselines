@@ -23,6 +23,7 @@ from text_detection_baselines.models.azure_batch import (
     AzureBatchDetector,
     AzureMLBatchClient,
     MissingConfigurationError,
+    TransientEndpointError,
     parse_analysis_reports,
 )
 
@@ -52,13 +53,19 @@ def _record(submission_id, decision, *, score=0.9, tau=0.7, is_flagged=None, inc
 
 
 class FakeClient:
-    """Records what was submitted and replays canned verdicts."""
+    """Records what was submitted and cancelled, and replays canned statuses and verdicts.
 
-    def __init__(self, records, statuses=("Completed",)):
+    A status that is an exception is raised rather than returned. The last status
+    repeats for as long as the job is polled.
+    """
+
+    def __init__(self, records, statuses=("Completed",), cancel_error=None):
         self.records = records
         self.statuses = list(statuses)
+        self.cancel_error = cancel_error
         self.submissions = []
         self.status_calls = 0
+        self.cancelled = []
 
     def submit(self, *, run_prefix, question, word_count, answers):
         self.submissions.append(
@@ -68,7 +75,15 @@ class FakeClient:
 
     def job_status(self, job_name):
         self.status_calls += 1
-        return self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        status = self.statuses.pop(0) if len(self.statuses) > 1 else self.statuses[0]
+        if isinstance(status, BaseException):
+            raise status
+        return status
+
+    def cancel(self, job_name):
+        self.cancelled.append(job_name)
+        if self.cancel_error is not None:
+            raise self.cancel_error
 
     def download_results(self, job_name):
         return self.records
@@ -284,18 +299,63 @@ def test_wait_polls_until_the_job_completes():
     )
     _detector(client).predict(_QUESTION, ["a"])
     assert client.status_calls == 3
+    assert client.cancelled == []
 
 
-def test_failed_job_raises():
+def test_failed_job_raises_without_being_cancelled():
+    # The job is already over, so there is nothing to cancel.
     client = FakeClient({}, statuses=["Failed"])
     with pytest.raises(RuntimeError, match="ended in state 'Failed'"):
         _detector(client).predict(_QUESTION, ["a"])
+    assert client.cancelled == []
 
 
-def test_job_that_never_finishes_times_out():
+def test_job_that_never_finishes_times_out_and_is_cancelled():
+    # Otherwise it would keep running, and billing, with nothing waiting for it.
     client = FakeClient({}, statuses=["Running"])
     with pytest.raises(RuntimeError, match="did not finish within"):
         _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+    assert client.cancelled == ["job-1"]
+
+
+def test_interrupted_wait_cancels_the_job():
+    client = FakeClient({}, statuses=[KeyboardInterrupt()])
+    with pytest.raises(KeyboardInterrupt):
+        _detector(client).predict(_QUESTION, ["a"])
+    assert client.cancelled == ["job-1"]
+
+
+def test_transient_status_errors_are_polled_through():
+    client = FakeClient(
+        {"000000.txt": _record("000000.txt", "No action")},
+        statuses=[TransientEndpointError("connection reset"), "Running", "Completed"],
+    )
+    _detector(client).predict(_QUESTION, ["a"])
+    assert client.status_calls == 3
+    assert client.cancelled == []
+
+
+def test_transient_status_errors_still_time_out():
+    client = FakeClient({}, statuses=[TransientEndpointError("host unreachable")])
+    with pytest.raises(RuntimeError, match="did not finish within"):
+        _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+    assert client.cancelled == ["job-1"]
+
+
+def test_other_status_errors_end_the_wait_and_cancel_the_job():
+    # Not known to clear up on its own, but the job itself may still be running.
+    client = FakeClient({}, statuses=[PermissionError("token expired")])
+    with pytest.raises(PermissionError):
+        _detector(client).predict(_QUESTION, ["a"])
+    assert client.cancelled == ["job-1"]
+
+
+def test_failed_cancel_is_logged_and_keeps_the_original_error(caplog):
+    client = FakeClient({}, statuses=["Running"], cancel_error=RuntimeError("network down"))
+    with pytest.raises(RuntimeError, match="did not finish within"):
+        _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+    # Named in the log so the job can be cancelled by hand.
+    assert "Could not cancel batch job job-1" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -376,6 +436,60 @@ def test_submit_invokes_the_endpoint_with_every_required_input(monkeypatch):
             "detection_pool": SimpleNamespace(type="uri_folder", path="azureml:detection_pool:2"),
         },
     }
+
+
+def _stub_azure_core_exceptions(monkeypatch):
+    """Install stand-ins for the azure-core exceptions, which the dev environment lacks."""
+    module = ModuleType("azure.core.exceptions")
+
+    class AzureError(Exception):
+        pass
+
+    class HttpResponseError(AzureError):
+        def __init__(self, message="", status_code=None):
+            super().__init__(message)
+            self.status_code = status_code
+
+    module.ServiceRequestError = type("ServiceRequestError", (AzureError,), {})
+    module.ServiceResponseError = type("ServiceResponseError", (AzureError,), {})
+    module.HttpResponseError = HttpResponseError
+    monkeypatch.setitem(sys.modules, "azure.core.exceptions", module)
+    return module
+
+
+@pytest.mark.parametrize(
+    ("error_name", "status_code", "transient"),
+    [
+        ("ServiceRequestError", None, True),
+        ("ServiceResponseError", None, True),
+        ("HttpResponseError", 503, True),
+        ("HttpResponseError", 429, True),
+        ("HttpResponseError", 404, False),
+        ("HttpResponseError", None, False),
+    ],
+)
+def test_job_status_marks_only_retryable_sdk_errors_as_transient(monkeypatch, error_name, status_code, transient):
+    exceptions = _stub_azure_core_exceptions(monkeypatch)
+    error_cls = getattr(exceptions, error_name)
+    error = error_cls("boom", status_code=status_code) if status_code is not None else error_cls("boom")
+
+    ml_client = MagicMock()
+    ml_client.jobs.get.side_effect = error
+    client = AzureMLBatchClient(_config())
+    monkeypatch.setattr(client, "_ml", lambda: ml_client)
+
+    with pytest.raises(TransientEndpointError if transient else error_cls):
+        client.job_status("job-1")
+
+
+def test_cancel_requests_cancellation_of_the_named_job(monkeypatch):
+    ml_client = MagicMock()
+    client = AzureMLBatchClient(_config())
+    monkeypatch.setattr(client, "_ml", lambda: ml_client)
+
+    client.cancel("job-1")
+
+    ml_client.jobs.begin_cancel.assert_called_once_with("job-1")
 
 
 # ---------------------------------------------------------------------------

@@ -93,6 +93,9 @@ the pipeline builds a per-assignment support set from the prompt.
 One `predict` call is one batch job: the answers are uploaded to blob storage, the
 endpoint is invoked, the job is polled to completion, and the per-submission verdicts
 are downloaded. Expect **minutes per invocation**, and a real cost per run.
+Dropped connections while polling are retried until the job's timeout. A job that
+times out, is interrupted with Ctrl-C, or can no longer be polled is cancelled rather
+than left running; its name is logged in case the cancellation itself fails.
 
 Verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is a
 window-max cosine judged against `tau`, a *per-document* length-matched conformal

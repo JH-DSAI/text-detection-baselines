@@ -60,12 +60,19 @@ INCONCLUSIVE_DECISION = "Inconclusive"
 _TERMINAL_SUCCESS = frozenset({"Completed"})
 _TERMINAL_FAILURE = frozenset({"Failed", "Canceled", "CancelRequested"})
 
+#: HTTP statuses worth polling through: timeouts, throttling, and server-side errors.
+_RETRYABLE_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+
 #: Name of the batch job output holding the per-submission reports.
 ANALYSIS_REPORTS_OUTPUT = "analysis_reports"
 
 
 class MissingConfigurationError(RuntimeError):
     """Raised when the ``TDB_AZURE_BATCH_*`` settings are unset or unusable."""
+
+
+class TransientEndpointError(RuntimeError):
+    """Raised by a :class:`BatchEndpointClient` for a failure that may clear up on retry."""
 
 
 #: Prefix of the environment variables :class:`AzureBatchConfig` reads.
@@ -159,7 +166,17 @@ class BatchEndpointClient(Protocol):
         ...
 
     def job_status(self, job_name: str) -> str:
-        """Return the raw Azure ML job status string."""
+        """Return the raw Azure ML job status string.
+
+        Raises:
+            TransientEndpointError: If the status could not be fetched for a
+                reason that may clear up on its own, such as a dropped
+                connection.
+        """
+        ...
+
+    def cancel(self, job_name: str) -> None:
+        """Ask Azure ML to cancel the job, without waiting for it to stop."""
         ...
 
     def download_results(self, job_name: str) -> dict[str, dict[str, Any]]:
@@ -256,7 +273,23 @@ class AzureMLBatchClient:
 
     def job_status(self, job_name: str) -> str:
         """Return the raw Azure ML job status string."""
-        return str(self._ml().jobs.get(job_name).status)
+        from azure.core.exceptions import HttpResponseError, ServiceRequestError, ServiceResponseError
+
+        # The SDK retries each request itself, but only for a few seconds. These
+        # are the failures left once it gives up, which a job polled for up to
+        # an hour should outlast rather than be abandoned over.
+        try:
+            return str(self._ml().jobs.get(job_name).status)
+        except (ServiceRequestError, ServiceResponseError) as exc:
+            raise TransientEndpointError(str(exc)) from exc
+        except HttpResponseError as exc:
+            if exc.status_code in _RETRYABLE_HTTP_STATUSES:
+                raise TransientEndpointError(str(exc)) from exc
+            raise
+
+    def cancel(self, job_name: str) -> None:
+        """Request cancellation. The returned poller is not waited on."""
+        self._ml().jobs.begin_cancel(job_name)
 
     def download_results(self, job_name: str) -> dict[str, dict[str, Any]]:
         """Download ``analysis_reports`` and parse the per-submission verdicts."""
@@ -435,20 +468,43 @@ class AzureBatchDetector(TextDetector):
         return f"{index:06d}.txt"
 
     def _wait_for_job(self, client: BatchEndpointClient, job_name: str) -> None:
-        """Block until the job succeeds, fails, or the timeout elapses.
+        """Block until the job succeeds, cancelling it if the wait is abandoned.
 
         Raises:
             RuntimeError: If the job reaches a failure state or does not finish
                 within :attr:`timeout_seconds`.
         """
+        try:
+            status = self._poll_until_finished(client, job_name)
+        except BaseException:
+            # Timed out, interrupted, or lost track of the job: it may still be
+            # running, and billing, with nothing left waiting for its results.
+            self._cancel_job(client, job_name)
+            raise
+
+        if status in _TERMINAL_FAILURE:
+            raise RuntimeError(f"Azure ML batch job {job_name} ended in state {status!r}")
+        LOGGER.info("Batch job %s completed", job_name)
+
+    def _poll_until_finished(self, client: BatchEndpointClient, job_name: str) -> str:
+        """Return the job's terminal status, polling until it has one.
+
+        A :class:`TransientEndpointError` is logged and polled through; any other
+        error from the client ends the wait.
+
+        Raises:
+            RuntimeError: If the job does not finish within :attr:`timeout_seconds`.
+        """
         deadline = time.monotonic() + self.timeout_seconds
+        status = None
         while True:
-            status = client.job_status(job_name)
-            if status in _TERMINAL_SUCCESS:
-                LOGGER.info("Batch job %s completed", job_name)
-                return
-            if status in _TERMINAL_FAILURE:
-                raise RuntimeError(f"Azure ML batch job {job_name} ended in state {status!r}")
+            try:
+                status = client.job_status(job_name)
+            except TransientEndpointError as exc:
+                LOGGER.warning("Could not check batch job %s, will retry: %s", job_name, exc)
+            else:
+                if status in _TERMINAL_SUCCESS | _TERMINAL_FAILURE:
+                    return status
 
             if time.monotonic() >= deadline:
                 raise RuntimeError(
@@ -456,6 +512,20 @@ class AzureBatchDetector(TextDetector):
                     f"{self.timeout_seconds:.0f}s (last state {status!r})",
                 )
             time.sleep(self.poll_interval_seconds)
+
+    @staticmethod
+    def _cancel_job(client: BatchEndpointClient, job_name: str) -> None:
+        """Cancel an abandoned job, best effort.
+
+        The job name is logged before the attempt, so it can be cancelled by hand
+        if the attempt fails or is itself interrupted. A failure here is logged
+        rather than raised, so it does not replace the error that abandoned the job.
+        """
+        LOGGER.warning("Cancelling batch job %s", job_name)
+        try:
+            client.cancel(job_name)
+        except Exception as exc:
+            LOGGER.warning("Could not cancel batch job %s, which may still be running: %s", job_name, exc)
 
     def _to_output(self, records: dict[str, dict[str, Any]], n_answers: int) -> ModelOutput:
         """Map verdict records back onto dataset-order arrays.
