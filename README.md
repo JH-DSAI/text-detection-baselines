@@ -128,6 +128,11 @@ than as an Azure SDK error several minutes in. That includes a
 typo. A misspelled variable exported in the shell cannot be detected this way
 and is ignored.
 
+Authentication goes through `azure-identity`'s `DefaultAzureCredential`: locally,
+`az login` is enough; for a headless run, export a service principal as
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`. Those must be
+set in the environment, not in `.env`, which is read only for `TDB_*` settings.
+
 ## Metrics
 
 Metrics are computed per (dataset, model) pair and again per `contribution_level`

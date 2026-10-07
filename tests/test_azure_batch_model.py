@@ -492,6 +492,30 @@ def test_cancel_requests_cancellation_of_the_named_job(monkeypatch):
     ml_client.jobs.begin_cancel.assert_called_once_with("job-1")
 
 
+def test_sdk_clients_share_one_credential_with_the_full_default_chain(monkeypatch):
+    sdk_classes = {
+        ("azure.identity", "DefaultAzureCredential"): MagicMock(),
+        ("azure.ai.ml", "MLClient"): MagicMock(),
+        ("azure.storage.blob", "BlobServiceClient"): MagicMock(),
+    }
+    for (module_name, class_name), cls in sdk_classes.items():
+        module = ModuleType(module_name)
+        setattr(module, class_name, cls)
+        monkeypatch.setitem(sys.modules, module_name, module)
+    credential_cls, ml_client_cls, blob_service_cls = sdk_classes.values()
+
+    client = AzureMLBatchClient(_config())
+    client._ml()
+    client._blob()
+
+    # No exclusions: the environment credential is how a service principal
+    # authenticates a headless run.
+    credential_cls.assert_called_once_with()
+    credential = credential_cls.return_value
+    assert ml_client_cls.call_args.args[0] is credential
+    assert blob_service_cls.call_args.kwargs["credential"] is credential
+
+
 # ---------------------------------------------------------------------------
 # Downloaded output parsing
 # ---------------------------------------------------------------------------

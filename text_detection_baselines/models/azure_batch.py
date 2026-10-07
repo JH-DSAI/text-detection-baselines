@@ -189,6 +189,7 @@ class AzureMLBatchClient:
 
     def __init__(self, config: AzureBatchConfig) -> None:
         self.config = config
+        self._azure_credential: Any | None = None
         self._ml_client: Any | None = None
         self._blob_service: Any | None = None
 
@@ -219,12 +220,13 @@ class AzureMLBatchClient:
             )
         return self._blob_service
 
-    @staticmethod
-    def _credential() -> Any:
-        from azure.identity import DefaultAzureCredential
-
-        # Environment credentials are tried first, polluting the log stream
-        return DefaultAzureCredential(exclude_environment_credential=True)
+    def _credential(self) -> Any:
+        # One credential for both clients, so the chain is walked and a token
+        # fetched once rather than per client.
+        if self._azure_credential is None:
+            from azure.identity import DefaultAzureCredential
+            self._azure_credential = DefaultAzureCredential()
+        return self._azure_credential
 
     def _input_uri(self, blob_path: str) -> str:
         # A datastore URI rather than a raw blob URL: the pipeline runs inside
