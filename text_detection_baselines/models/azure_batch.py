@@ -225,6 +225,7 @@ class AzureMLBatchClient:
         # fetched once rather than per client.
         if self._azure_credential is None:
             from azure.identity import DefaultAzureCredential
+
             self._azure_credential = DefaultAzureCredential()
         return self._azure_credential
 
