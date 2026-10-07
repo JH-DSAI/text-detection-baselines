@@ -106,8 +106,8 @@ class AzureBatchConfig(BaseSettings):
     endpoint_name: str = "text-detection-batch-processing"
     # Required pinned Data Assets for the detection pipeline (AzureML disallows
     # defaults on data inputs, so these are attached explicitly on every invoke).
-    pipeline_config_asset: str = "azureml:pipeline_config_yaml:6"
-    detection_pool_asset: str = "azureml:detection_pool:1"
+    pipeline_config_asset: str = "azureml:pipeline_config_yaml:8"
+    detection_pool_asset: str = "azureml:detection_pool:5"
     # Fallback word count for the assignment JSON.
     assignment_default_word_count: PositiveInt = 300
     # Blob prefix this package writes under, kept separate from the
