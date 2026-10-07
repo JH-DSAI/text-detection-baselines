@@ -612,11 +612,19 @@ def main(
     LOGGER.info("Evaluation complete")
 
 
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # At INFO the Azure SDKs log every HTTP request with its headers (one per uploaded
+    # answer and per job status poll) and each credential they try. Their warnings and
+    # errors still come through.
+    logging.getLogger("azure").setLevel(logging.WARNING)
+
+
 if __name__ == "__main__":
     # Configured at the process entry point rather than inside ``main``: ``basicConfig``
     # binds a handler to the ``sys.stderr`` in effect at the first call and is a no-op
     # afterwards, so calling it from the command body silently sends the logs of every
     # later in-process invocation to the first caller's stream, which causes problems in
     # testing.
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    _configure_logging()
     main()

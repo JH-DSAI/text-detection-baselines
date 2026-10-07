@@ -10,6 +10,7 @@ import pytest
 from text_detection_baselines import cli as cli_module
 from text_detection_baselines.cli import (
     NAME_PATH,
+    _configure_logging,
     _flatten_overall,
     _flatten_per_category,
     _raise_for_unavailable_dataset,
@@ -817,3 +818,17 @@ def test_cli_can_run_twice_in_one_process(runner, tmp_path, tiny_dataset, clean_
         assert (tmp_path / run / "metrics.json").is_file()
 
     assert root.handlers == [], f"the command body configured the root logger: {root.handlers}"
+
+
+def test_logging_setup_keeps_the_azure_sdks_to_warnings():
+    # The SDKs' HTTP logging policy logs each request at INFO, with its headers.
+    http_logger = logging.getLogger("azure.core.pipeline.policies.http_logging_policy")
+    azure_logger = logging.getLogger("azure")
+    level = azure_logger.level
+    try:
+        _configure_logging()
+
+        assert not http_logger.isEnabledFor(logging.INFO)
+        assert http_logger.isEnabledFor(logging.WARNING)
+    finally:
+        azure_logger.setLevel(level)
