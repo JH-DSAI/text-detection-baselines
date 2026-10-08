@@ -335,6 +335,31 @@ def test_predict_raises_when_a_verdict_is_missing():
         _detector(client).predict(_QUESTION, ["a", "b"])
 
 
+@pytest.mark.parametrize("field", ["score", "tau"])
+def test_predict_raises_when_a_scored_verdict_has_no_margin(field):
+    # A stand-in margin would go into AUROC and AP as if it were real.
+    records = {f"{i:06d}.txt": _record(f"{i:06d}.txt", "No action") for i in range(2)}
+    records["000001.txt"][field] = None
+    client = FakeClient(records)
+
+    with pytest.raises(
+        RuntimeError, match=r"no score or tau for 1 of 2 submission\(s\) not marked Inconclusive: 000001.txt"
+    ):
+        _detector(client).predict(_QUESTION, ["a", "b"])
+
+
+def test_predict_accepts_an_inconclusive_verdict_without_a_margin():
+    # The pipeline leaves the score out for a submission it declined to score.
+    record = _record("000000.txt", "Inconclusive", inconclusive_reason={"code": "too_short", "explanation": "…"})
+    record["score"] = record["tau"] = None
+    client = FakeClient({"000000.txt": record})
+
+    output = _detector(client).predict(_QUESTION, ["a"])
+
+    np.testing.assert_array_equal(output.ood_flags, [True])
+    np.testing.assert_array_equal(output.scores, [0.0])
+
+
 def test_predict_chunks_large_batches_and_keeps_row_order():
     records = {f"{i:06d}.txt": _record(f"{i:06d}.txt", "No action", score=i / 10, tau=0.0) for i in range(5)}
     client = FakeClient(records)

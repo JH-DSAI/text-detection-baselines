@@ -363,6 +363,12 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
     return records
 
 
+def _some(names: list[str], limit: int = 5) -> str:
+    """List the first *limit* names, and how many more there are."""
+    shown = ", ".join(names[:limit])
+    return f"{shown} (and {len(names) - limit} more)" if len(names) > limit else shown
+
+
 def _missing_azure_sdks() -> list[str]:
     """Name the SDK modules that cannot be imported, without importing them."""
     missing = []
@@ -578,13 +584,16 @@ class AzureBatchDetector(TextDetector):
                 emits one record per input file -- including files it declined
                 to score -- so a gap means results and inputs cannot be aligned,
                 and silently filling it would attribute one submission's verdict
-                to another.
+                to another. Also if a submission not flagged OOD has no ``score``
+                or ``tau``, since any stand-in margin would skew the ranking
+                metrics.
         """
         scores = np.zeros(n_answers, dtype=float)
         predictions = np.zeros(n_answers, dtype=int)
         ood_flags = np.zeros(n_answers, dtype=bool)
 
         missing: list[str] = []
+        unscored: list[str] = []
         for index in range(n_answers):
             key = self._submission_filename(index)
             record = records.get(key)
@@ -602,16 +611,23 @@ class AzureBatchDetector(TextDetector):
 
             score = record.get("score")
             tau = record.get("tau")
-            # Zeroed by the pipeline for a submission it declined to score; the
-            # resulting 0.0 margin is excluded from the ranking metrics anyway,
-            # because the row is flagged OOD above.
-            scores[index] = 0.0 if score is None or tau is None else float(score) - float(tau)
+            if score is None or tau is None:
+                # Left out by the pipeline for a submission it declined to score,
+                # whose 0.0 margin the ranking metrics skip because the row is
+                # flagged OOD. Any other submission must have both.
+                if not ood_flags[index]:
+                    unscored.append(key)
+                continue
+            scores[index] = float(score) - float(tau)
 
         if missing:
-            shown = ", ".join(missing[:5])
-            suffix = f" (and {len(missing) - 5} more)" if len(missing) > 5 else ""
             raise RuntimeError(
-                f"Endpoint returned no verdict for {len(missing)} of {n_answers} submission(s): {shown}{suffix}",
+                f"Endpoint returned no verdict for {len(missing)} of {n_answers} submission(s): {_some(missing)}",
+            )
+        if unscored:
+            raise RuntimeError(
+                f"Endpoint returned no score or tau for {len(unscored)} of {n_answers} submission(s) "
+                f"not marked Inconclusive: {_some(unscored)}",
             )
 
         return ModelOutput(scores=scores, predictions=predictions, ood_flags=ood_flags)
