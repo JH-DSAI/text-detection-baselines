@@ -108,11 +108,23 @@ the margin `score - tau`, which is, and which is unbounded rather than in `[0, 1
 | `ood_flags` | decision `Inconclusive` — a submission the detector declined to assess |
 | `scores` | `score - tau` |
 
-Install the SDKs and run it with:
+Each question is its own batch job, and jobs run one after another, so start with
+a single question. These commands copy the 12 answers to one question out of the
+bundled `demo` data and evaluate them in one job, using the `azure` environment,
+which has the Azure SDKs:
 
 ```bash
-pixi run -e azure main --dataset demo --model azure-batch
+grep '"question": "A committee must decide the future of seasonal water rationing' \
+  text_detection_baselines/datasets/data/demo.jsonl > datasets/demo-one-question.jsonl
+pixi run -e azure main --register-file-dataset one-question=datasets/demo-one-question.jsonl \
+  --exclude-dataset demo --model azure-batch
 ```
+
+Keep `--exclude-dataset demo`: `--model` and `--register-file-dataset` add to the
+default selection rather than replacing it, and `azure-batch` on the whole `demo`
+dataset is 32 jobs, one per question. The default stub models run as well, at no
+real cost. The `demo` text is synthetic, so this run checks the wiring, not the
+detector.
 
 Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
 or in `.env` (see [Configuration](#configuration)).
