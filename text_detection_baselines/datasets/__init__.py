@@ -13,6 +13,7 @@ from .file import (
     DEFAULT_LABEL_KEY,
     DEFAULT_QUESTION_KEY,
     DEFAULT_TEXT_KEY,
+    DatasetError,
     FileDatasetBatch,
     load_file_dataset,
 )
@@ -229,6 +230,7 @@ __all__ = [
     "GEDE_FILENAME",
     "GEDE_PATH_ENV_VAR",
     "GEDE_PREPARE_HINT",
+    "DatasetError",
     "DatasetSpec",
     "FileDatasetBatch",
     "dataset_available",

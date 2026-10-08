@@ -29,15 +29,17 @@ from .datasets import (
     DEFAULT_QUESTION_KEY,
     DEFAULT_TEXT_KEY,
     GEDE_PREPARE_HINT,
+    DatasetError,
     DatasetSpec,
     dataset_available,
     get_dataset_spec,
     get_default_dataset_names,
     list_registered_datasets,
+    load_dataset,
     register_file_dataset,
 )
 from .evaluate import build_results_tree, evaluate_model_on_dataset
-from .models import build_model, get_default_model_names, list_registered_models
+from .models import ModelUnavailableError, build_model, get_default_model_names, list_registered_models
 
 LOGGER = logging.getLogger(__name__)
 
@@ -86,6 +88,35 @@ def _raise_for_unavailable_dataset(spec: DatasetSpec) -> None:
             "Point --register-file-dataset at an existing file, or choose another dataset.",
         ]
     raise click.ClickException("\n".join(lines))
+
+
+def _raise_for_unevaluable_dataset(spec: DatasetSpec) -> None:
+    """Fail with an actionable message when a dataset cannot be loaded or evaluated.
+
+    Run for every selected dataset before any model is, so that a bad file is
+    reported at once rather than after the (dataset, model) pairs ahead of it,
+    which for a remote model can take hours, have run and had their results
+    discarded.
+    """
+    try:
+        # We are loading a local dataset from JSON and we assume the user trusts it
+        batch = load_dataset(  # nosec: B615[huggingface_unsafe_download]
+            dataset_type=spec.dataset_type,
+            path=spec.path,
+            text_key=spec.text_key,
+            label_key=spec.label_key,
+            category_key=spec.category_key,
+            question_key=spec.question_key,
+        )
+    except DatasetError as exc:
+        raise click.ClickException(f"Dataset '{spec.name}' could not be loaded: {exc}") from exc
+
+    present = set(batch.labels.tolist())
+    if present != {0, 1}:
+        only = "human" if present == {0} else "machine"
+        raise click.ClickException(
+            f"Dataset '{spec.name}' has only {only} labels ({spec.path}); evaluation needs both.",
+        )
 
 
 class NamePathParamType(click.ParamType):
@@ -578,6 +609,7 @@ def main(
     specs = [get_dataset_spec(name) for name in selected_datasets]
     for spec in specs:
         _raise_for_unavailable_dataset(spec)
+        _raise_for_unevaluable_dataset(spec)
 
     model_objs = [build_model(name, ood_margin=ood_margin, seed=seed) for name in selected_models]
 
@@ -586,15 +618,18 @@ def main(
     for dataset in specs:
         for model in model_objs:
             LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset.name)
-            overall, per_cat = evaluate_model_on_dataset(
-                dataset_path=dataset.path,
-                model=model,
-                target_alpha=target_alpha,
-                text_key=dataset.text_key,
-                label_key=dataset.label_key,
-                category_key=dataset.category_key,
-                question_key=dataset.question_key,
-            )
+            try:
+                overall, per_cat = evaluate_model_on_dataset(
+                    dataset_path=dataset.path,
+                    model=model,
+                    target_alpha=target_alpha,
+                    text_key=dataset.text_key,
+                    label_key=dataset.label_key,
+                    category_key=dataset.category_key,
+                    question_key=dataset.question_key,
+                )
+            except ModelUnavailableError as exc:
+                raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
             run_results.append((dataset.name, model.model_name, overall, per_cat))
 
     tree = build_results_tree(run_results)

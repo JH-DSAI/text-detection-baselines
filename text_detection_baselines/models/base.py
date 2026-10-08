@@ -22,6 +22,13 @@ class ModelOutput:
     """True where the sample is flagged as out-of-distribution."""
 
 
+class ModelUnavailableError(RuntimeError):
+    """Raised when a detector cannot run here: a dependency or setting is missing.
+
+    The message says what to install or set, so it can be shown to the user as is.
+    """
+
+
 class TextDetector(ABC):
     """Abstract interface for all detector implementations."""
 

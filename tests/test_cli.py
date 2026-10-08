@@ -832,3 +832,99 @@ def test_logging_setup_keeps_the_azure_sdks_to_warnings():
         assert http_logger.isEnabledFor(logging.WARNING)
     finally:
         azure_logger.setLevel(level)
+
+
+def test_cli_reports_an_unloadable_dataset_before_running_any_model(
+    runner, tmp_path, tiny_dataset, clean_registry, caplog
+):
+    caplog.set_level(logging.INFO)
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text('{"answer": "a", "label": "real"}\n{"answer": "b",\n', encoding="utf-8")
+
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"tiny={tiny_dataset}",
+            "--register-file-dataset",
+            f"bad={bad}",
+            "--exclude-dataset",
+            "demo",
+            *_ONE_MODEL,
+        ],
+    )
+
+    # A ClickException, which click reports as exit 1 with the message on stderr.
+    assert result.exit_code == 1
+    assert "Dataset 'bad' could not be loaded" in result.stderr
+    assert "Invalid JSON on line 2" in result.stderr
+    # Not even on 'tiny', which comes first and is fine.
+    assert not any("Evaluating" in record.getMessage() for record in caplog.records)
+
+
+def test_cli_reports_a_dataset_with_one_label(runner, tmp_path, clean_registry):
+    rows = [row for row in _TINY_ROWS if row["label"] == "real"]
+    path = tmp_path / "human-only.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    result = runner.invoke(
+        main, ["--register-file-dataset", f"human-only={path}", "--exclude-dataset", "demo", *_ONE_MODEL]
+    )
+
+    assert result.exit_code == 1
+    assert "has only human labels" in result.stderr
+
+
+# Safe to run in process despite AGENTS.md's caution about azure-batch: both
+# failures happen before any Azure client is built, and conftest hides the
+# developer's own TDB_* settings, so nothing reaches the network.
+_AZURE_ONLY = [
+    "--model",
+    "azure-batch",
+    "--exclude-model",
+    "dummy-norm",
+    "--exclude-model",
+    "dummy-raw",
+    "--exclude-model",
+    "length",
+]
+
+
+@pytest.fixture
+def tiny_dataset_with_question(tmp_path):
+    """:data:`_TINY_ROWS` with a question, which azure-batch requires."""
+    path = tmp_path / "tiny-with-question.jsonl"
+    path.write_text(
+        "".join(json.dumps(dict(row, question="Should homework be banned?")) + "\n" for row in _TINY_ROWS),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_cli_reports_missing_azure_sdks_with_how_to_install_them(
+    runner, tiny_dataset_with_question, clean_registry, monkeypatch
+):
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: None)
+
+    result = runner.invoke(
+        main,
+        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_AZURE_ONLY],
+    )
+
+    assert result.exit_code == 1
+    assert "Model 'azure-batch' cannot run" in result.stderr
+    assert "pixi run -e azure" in result.stderr
+
+
+def test_cli_reports_missing_azure_configuration(runner, tiny_dataset_with_question, clean_registry, monkeypatch):
+    # The SDKs are reported present, so the next check, the configuration, fails.
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: object())
+
+    result = runner.invoke(
+        main,
+        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_AZURE_ONLY],
+    )
+
+    assert result.exit_code == 1
+    assert "Model 'azure-batch' cannot run" in result.stderr
+    assert "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL" in result.stderr

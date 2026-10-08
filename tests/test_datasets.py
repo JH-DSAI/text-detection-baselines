@@ -18,7 +18,7 @@ from text_detection_baselines.datasets import (
     register_file_dataset,
     resolve_gede_path,
 )
-from text_detection_baselines.datasets.file import FileDatasetBatch, load_file_dataset
+from text_detection_baselines.datasets.file import DatasetError, FileDatasetBatch, load_file_dataset
 
 _ROWS = [
     {"answer": "A short human answer.", "label": "real", "contribution_level": "Human"},
@@ -102,7 +102,27 @@ def test_load_file_dataset_rejects_a_null_text(tmp_path):
     path = tmp_path / "null-text.jsonl"
     path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="Null 'answer' in record 3"):
+    with pytest.raises(DatasetError, match="Null 'answer' in record 3"):
+        load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (b'[{"answer": "a", "label": "real"},', "Invalid JSON in"),
+        (b'{"answer": "a", "label": "real"}\n{"answer": "b",\n', "Invalid JSON on line 2"),
+        (b'{"answer": "a", "label": "maybe"}\n', "Unsupported 'label' value 'maybe' in record 1"),
+        # Usually a --text-key or --label-key that does not match the file.
+        (b'{"text": "a", "label": "real"}\n', "No records in .* have both 'answer' and 'label'"),
+        (b"\xff\xfe\x00\x00", "Not UTF-8 text"),
+    ],
+    ids=["json-array", "json-lines", "label", "keys", "encoding"],
+)
+def test_load_file_dataset_names_what_is_wrong_with_the_file(tmp_path, content, message):
+    path = tmp_path / "bad.jsonl"
+    path.write_bytes(content)
+
+    with pytest.raises(DatasetError, match=message):
         load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
 
 

@@ -19,6 +19,14 @@ DEFAULT_CATEGORY_KEY = "contribution_level"
 DEFAULT_QUESTION_KEY = "question"
 
 
+class DatasetError(ValueError):
+    """Raised when a dataset file cannot be loaded as given.
+
+    A ``ValueError``, so callers that catch that still do. The message names the
+    file, and the record where there is one, so it can be shown to the user as is.
+    """
+
+
 @dataclass(frozen=True)
 class FileDatasetBatch:
     """Reusable in-memory dataset representation.
@@ -53,14 +61,20 @@ def normalize_label(raw_label: Any) -> int:
 
 
 def _read_json_records(path: Path) -> list[dict[str, Any]]:
-    raw = path.read_text(encoding="utf-8").strip()
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise DatasetError(f"Not UTF-8 text: {path}") from exc
     if not raw:
-        raise ValueError(f"Dataset is empty: {path}")
+        raise DatasetError(f"Dataset is empty: {path}")
 
     if raw[0] == "[":
-        loaded = json.loads(raw)
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise DatasetError(f"Invalid JSON in {path}: {exc}") from exc
         if not isinstance(loaded, list):
-            raise ValueError(f"Expected JSON array in {path}")
+            raise DatasetError(f"Expected JSON array in {path}")
         return [row for row in loaded if isinstance(row, dict)]
 
     records: list[dict[str, Any]] = []
@@ -71,7 +85,7 @@ def _read_json_records(path: Path) -> list[dict[str, Any]]:
         try:
             row = json.loads(line)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON on line {idx} in {path}") from exc
+            raise DatasetError(f"Invalid JSON on line {idx} in {path}") from exc
         if isinstance(row, dict):
             records.append(row)
     return records
@@ -101,9 +115,9 @@ def load_file_dataset(
     as a missing one.
 
     Raises:
-        ValueError: If the file holds no usable rows, a label is unrecognized,
-            or a text is ``null``, which would otherwise be scored as the text
-            ``"None"``.
+        DatasetError: If the file is not valid JSON or JSON lines, holds no
+            usable rows, or has a row whose label is unrecognized or whose text
+            is ``null``, which would otherwise be scored as the text ``"None"``.
     """
     records = _read_json_records(path)
 
@@ -116,14 +130,20 @@ def load_file_dataset(
         if text_key not in row or label_key not in row:
             continue
         if row[text_key] is None:
-            raise ValueError(f"Null {text_key!r} in record {number} of {path}")
+            raise DatasetError(f"Null {text_key!r} in record {number} of {path}")
+        try:
+            label = normalize_label(row[label_key])
+        except ValueError as exc:
+            raise DatasetError(
+                f"Unsupported {label_key!r} value {row[label_key]!r} in record {number} of {path}"
+            ) from exc
         texts.append(str(row[text_key]))
-        labels.append(normalize_label(row[label_key]))
+        labels.append(label)
         categories.append(_optional_field(row, category_key, "unknown"))
         questions.append(_optional_field(row, question_key, ""))
 
     if not texts:
-        raise ValueError(f"No valid samples with required keys in {path}")
+        raise DatasetError(f"No records in {path} have both {text_key!r} and {label_key!r}")
 
     return FileDatasetBatch(
         texts=texts,

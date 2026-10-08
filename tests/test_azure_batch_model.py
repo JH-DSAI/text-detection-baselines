@@ -23,6 +23,7 @@ from text_detection_baselines.models.azure_batch import (
     AzureBatchDetector,
     AzureMLBatchClient,
     MissingConfigurationError,
+    MissingDependencyError,
     TransientEndpointError,
     parse_analysis_reports,
 )
@@ -241,6 +242,21 @@ def test_detector_is_registered_but_not_a_default():
 
     assert "azure-batch" in list_registered_models()
     assert "azure-batch" not in get_default_model_names()
+
+
+def _parent_package_missing(name):
+    raise ModuleNotFoundError(f"No module named {name.split('.')[0]!r}")
+
+
+@pytest.mark.parametrize("find_spec", [lambda name: None, _parent_package_missing], ids=["module", "parent"])
+def test_missing_sdks_are_reported_with_how_to_install_them(monkeypatch, find_spec):
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", find_spec)
+    detector = AzureBatchDetector(
+        model_name="azure-batch", normalized_scores=False, ood_margin=0.08, seed=7, config=_config()
+    )
+
+    with pytest.raises(MissingDependencyError, match=r"pixi run -e azure main"):
+        detector.predict(_QUESTION, ["a"])
 
 
 def test_build_model_does_not_touch_the_environment():

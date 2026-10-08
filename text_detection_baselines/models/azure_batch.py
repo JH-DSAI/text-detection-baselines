@@ -35,6 +35,7 @@ import json
 import logging
 import time
 import uuid
+from importlib.util import find_spec
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -44,7 +45,7 @@ from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..settings import ENV_PREFIX
-from .base import ModelOutput, TextDetector
+from .base import ModelOutput, ModelUnavailableError, TextDetector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -66,9 +67,16 @@ _RETRYABLE_HTTP_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 #: Name of the batch job output holding the per-submission reports.
 ANALYSIS_REPORTS_OUTPUT = "analysis_reports"
 
+#: The SDK modules :class:`AzureMLBatchClient` imports, from the ``azure`` extra.
+_AZURE_SDK_MODULES = ("azure.ai.ml", "azure.identity", "azure.storage.blob")
 
-class MissingConfigurationError(RuntimeError):
+
+class MissingConfigurationError(ModelUnavailableError):
     """Raised when the ``TDB_AZURE_BATCH_*`` settings are unset or unusable."""
+
+
+class MissingDependencyError(ModelUnavailableError):
+    """Raised when the Azure SDKs the real client needs are not installed."""
 
 
 class TransientEndpointError(RuntimeError):
@@ -355,6 +363,19 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
     return records
 
 
+def _missing_azure_sdks() -> list[str]:
+    """Name the SDK modules that cannot be imported, without importing them."""
+    missing = []
+    for name in _AZURE_SDK_MODULES:
+        try:
+            spec = find_spec(name)
+        except ModuleNotFoundError:  # a parent package, such as ``azure`` itself
+            spec = None
+        if spec is None:
+            missing.append(name)
+    return missing
+
+
 class AzureBatchDetector(TextDetector):
     """Detector that scores submissions via the Azure ML batch endpoint.
 
@@ -400,6 +421,15 @@ class AzureBatchDetector(TextDetector):
 
     def _ensure_client(self) -> BatchEndpointClient:
         if self._client is None:
+            # Checked here rather than left to the client's lazy imports, which
+            # would fail as a bare ModuleNotFoundError partway through a run.
+            missing = _missing_azure_sdks()
+            if missing:
+                raise MissingDependencyError(
+                    f"Azure SDKs are not installed (missing {', '.join(missing)}). "
+                    "Run in the pixi azure environment (pixi run -e azure main ...), "
+                    "or install the extra if using pip (pip install 'text-detection-baselines[azure]').",
+                )
             self._client = AzureMLBatchClient(self.config)
         return self._client
 
@@ -416,6 +446,10 @@ class AzureBatchDetector(TextDetector):
 
         Raises:
             ValueError: If *question* is empty.
+            MissingDependencyError: If no client was given and the Azure SDKs
+                are not installed.
+            MissingConfigurationError: If no config was given and the
+                ``TDB_AZURE_BATCH_*`` settings are unset or unusable.
         """
         if not question.strip():
             raise ValueError(
@@ -430,18 +464,21 @@ class AzureBatchDetector(TextDetector):
                 ood_flags=np.empty(0, dtype=bool),
             )
 
+        # Before the config is read, so a missing install is reported ahead of
+        # missing settings.
+        client = self._ensure_client()
         chunk_size = self.config.max_batch_size or len(answers)
         records: dict[str, dict[str, Any]] = {}
         for start in range(0, len(answers), chunk_size):
             chunk = answers[start : start + chunk_size]
-            records.update(self._score_chunk(question, chunk, first_index=start))
+            records.update(self._score_chunk(client, question, chunk, first_index=start))
 
         return self._to_output(records, n_answers=len(answers))
 
-    def _score_chunk(self, question: str, answers: list[str], first_index: int) -> dict[str, dict[str, Any]]:
+    def _score_chunk(
+        self, client: BatchEndpointClient, question: str, answers: list[str], first_index: int
+    ) -> dict[str, dict[str, Any]]:
         """Run one endpoint invocation and return its verdict records."""
-        client = self._ensure_client()
-
         # Globally unique per invocation: concurrent evaluation runs share the
         # container, and a reused prefix would have one run's job read another
         # run's submissions folder.

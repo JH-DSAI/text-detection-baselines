@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .azure_batch import AzureBatchDetector
-from .base import ModelOutput, TextDetector
+from .base import ModelOutput, ModelUnavailableError, TextDetector
 from .length_heuristic import LengthHeuristicStubDetector
 from .prompting_smol import SmolLMPromptingDetector
 from .torch_linear import TorchLinearStubDetector
@@ -25,6 +25,7 @@ __all__ = [
     "MODEL_REGISTRY",
     "ModelOutput",
     "ModelSpec",
+    "ModelUnavailableError",
     "register_model",
     "SmolLMPromptingDetector",
     "TextDetector",
