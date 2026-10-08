@@ -32,6 +32,10 @@ class ModelUnavailableError(RuntimeError):
 class TextDetector(ABC):
     """Abstract interface for all detector implementations."""
 
+    #: Whether :meth:`predict` needs a non-empty question, so that callers can
+    #: reject a dataset without questions before invoking the detector at all.
+    requires_question: bool = False
+
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
         self.model_name = model_name
         self.normalized_scores = normalized_scores

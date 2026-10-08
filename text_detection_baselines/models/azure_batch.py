@@ -386,6 +386,8 @@ class AzureBatchDetector(TextDetector):
     implementation detail.
     """
 
+    requires_question = True
+
     def __init__(
         self,
         model_name: str,
@@ -453,8 +455,7 @@ class AzureBatchDetector(TextDetector):
         """
         if not question.strip():
             raise ValueError(
-                f"Model '{self.model_name}' requires an assignment question; "
-                "the dataset supplied an empty one (check --question-key).",
+                f"Model '{self.model_name}' requires an assignment question, but was given an empty one.",
             )
 
         if not answers:

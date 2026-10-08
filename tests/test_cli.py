@@ -928,3 +928,18 @@ def test_cli_reports_missing_azure_configuration(runner, tiny_dataset_with_quest
     assert result.exit_code == 1
     assert "Model 'azure-batch' cannot run" in result.stderr
     assert "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL" in result.stderr
+
+
+def test_cli_rejects_answers_without_a_question_before_running_any_model(runner, tiny_dataset, clean_registry, caplog):
+    caplog.set_level(logging.INFO)
+
+    # The stub models stay selected: they accept answers without a question,
+    # but must not run ahead of the failure either.
+    result = runner.invoke(
+        main,
+        ["--register-file-dataset", f"tiny={tiny_dataset}", "--exclude-dataset", "demo", "--model", "azure-batch"],
+    )
+
+    assert result.exit_code == 1
+    assert "needs a question for every answer, but 4 of 4 answers in dataset 'tiny'" in result.stderr
+    assert not any("Evaluating" in record.getMessage() for record in caplog.records)

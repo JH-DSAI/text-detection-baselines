@@ -31,6 +31,7 @@ from .datasets import (
     GEDE_PREPARE_HINT,
     DatasetError,
     DatasetSpec,
+    FileDatasetBatch,
     dataset_available,
     get_dataset_spec,
     get_default_dataset_names,
@@ -39,7 +40,13 @@ from .datasets import (
     register_file_dataset,
 )
 from .evaluate import build_results_tree, evaluate_model_on_dataset
-from .models import ModelUnavailableError, build_model, get_default_model_names, list_registered_models
+from .models import (
+    ModelUnavailableError,
+    TextDetector,
+    build_model,
+    get_default_model_names,
+    list_registered_models,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -90,8 +97,8 @@ def _raise_for_unavailable_dataset(spec: DatasetSpec) -> None:
     raise click.ClickException("\n".join(lines))
 
 
-def _raise_for_unevaluable_dataset(spec: DatasetSpec) -> None:
-    """Fail with an actionable message when a dataset cannot be loaded or evaluated.
+def _load_evaluable_dataset(spec: DatasetSpec) -> FileDatasetBatch:
+    """Load a dataset, failing with an actionable message if it cannot be evaluated.
 
     Run for every selected dataset before any model is, so that a bad file is
     reported at once rather than after the (dataset, model) pairs ahead of it,
@@ -117,6 +124,27 @@ def _raise_for_unevaluable_dataset(spec: DatasetSpec) -> None:
         raise click.ClickException(
             f"Dataset '{spec.name}' has only {only} labels ({spec.path}); evaluation needs both.",
         )
+    return batch
+
+
+def _raise_for_missing_questions(spec: DatasetSpec, batch: FileDatasetBatch, model: TextDetector) -> None:
+    """Fail when a model that needs a question would be given answers without one.
+
+    Checked up front for the same reason as :func:`_load_evaluable_dataset`: the
+    model itself only fails on reaching the first such answer, which may come
+    after it has already been invoked for others.
+    """
+    if not model.requires_question:
+        return
+    missing = sum(1 for question in batch.questions.tolist() if not str(question).strip())
+    if not missing:
+        return
+
+    raise click.ClickException(
+        f"Model '{model.model_name}' needs a question for every answer, but {missing} of "
+        f"{len(batch)} answers in dataset '{spec.name}' have none. The question field may "
+        "not be specified correctly.",
+    )
 
 
 class NamePathParamType(click.ParamType):
@@ -607,11 +635,16 @@ def main(
     # Resolved and checked before any model is built: constructing ``smollm2``
     # downloads weights, which should not happen only to fail on a missing dataset.
     specs = [get_dataset_spec(name) for name in selected_datasets]
+    batches: dict[str, FileDatasetBatch] = {}
     for spec in specs:
         _raise_for_unavailable_dataset(spec)
-        _raise_for_unevaluable_dataset(spec)
+        batches[spec.name] = _load_evaluable_dataset(spec)
 
     model_objs = [build_model(name, ood_margin=ood_margin, seed=seed) for name in selected_models]
+
+    for spec in specs:
+        for model in model_objs:
+            _raise_for_missing_questions(spec, batches[spec.name], model)
 
     run_results: list[tuple[str, str, dict, dict]] = []
 

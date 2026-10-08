@@ -86,7 +86,8 @@ plausibly receives all submissions for an assignment at once and can use batch
 statistics in prediction. Rows are grouped by their `--question-key` field, so a
 dataset spanning many prompts produces one invocation per prompt. The stub models
 ignore the question and score each answer on its own; `azure-batch` needs it, because
-the pipeline builds a per-assignment support set from the prompt.
+the pipeline builds a per-assignment support set from the prompt, and a dataset with
+any answer that has no question is rejected before anything runs.
 
 ### The `azure-batch` model
 
