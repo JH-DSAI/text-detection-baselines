@@ -101,17 +101,34 @@ def _config(**overrides):
     )
 
 
-def _detector(client, **kwargs):
+def _detector(client, **config_overrides):
     return AzureBatchDetector(
         model_name="azure-batch",
         normalized_scores=False,
         ood_margin=0.08,
         seed=7,
-        config=_config(),
+        config=_config(**config_overrides),
         client=client,
-        poll_interval_seconds=0.0,
-        **kwargs,
     )
+
+
+@pytest.fixture(autouse=True)
+def fake_clock(monkeypatch):
+    """Stand in for the module's clock, so job polling never really sleeps.
+
+    ``sleep`` advances ``monotonic`` instead, which lets the polling tests use
+    real intervals and timeouts and still finish at once.
+    """
+    clock = SimpleNamespace(now=0.0)
+
+    def sleep(seconds):
+        clock.now += seconds
+
+    monkeypatch.setattr(
+        "text_detection_baselines.models.azure_batch.time",
+        SimpleNamespace(monotonic=lambda: clock.now, sleep=sleep),
+    )
+    return clock
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +146,19 @@ def test_config_from_env_reads_the_prefixed_variables(monkeypatch):
     assert config.endpoint_name == "text-detection-batch-processing"
     assert config.storage_container == "text-detect-uploads-staging"
     assert config.assignment_default_word_count == 300
+    assert config.max_batch_size is None
+
+
+def test_config_from_env_reads_the_job_settings(monkeypatch):
+    for name, value in _ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("TDB_AZURE_BATCH_POLL_INTERVAL_SECONDS", "5")
+    monkeypatch.setenv("TDB_AZURE_BATCH_TIMEOUT_SECONDS", "600")
+    monkeypatch.setenv("TDB_AZURE_BATCH_MAX_BATCH_SIZE", "50")
+
+    config = AzureBatchConfig.from_env()
+
+    assert (config.poll_interval_seconds, config.timeout_seconds, config.max_batch_size) == (5.0, 600.0, 50)
 
 
 def test_config_from_env_reports_every_missing_variable_at_once(monkeypatch):
@@ -152,12 +182,24 @@ def test_config_from_env_treats_a_blank_variable_as_unset(monkeypatch):
         AzureBatchConfig.from_env()
 
 
-def test_config_rejects_non_positive_word_count(monkeypatch):
-    for name, value in _ENV.items():
-        monkeypatch.setenv(name, value)
-    monkeypatch.setenv("TDB_AZURE_BATCH_ASSIGNMENT_DEFAULT_WORD_COUNT", "0")
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("TDB_AZURE_BATCH_ASSIGNMENT_DEFAULT_WORD_COUNT", "0"),
+        ("TDB_AZURE_BATCH_POLL_INTERVAL_SECONDS", "0"),
+        ("TDB_AZURE_BATCH_TIMEOUT_SECONDS", "-60"),
+        # Zero would otherwise read as "no limit", and a negative size would
+        # submit nothing at all.
+        ("TDB_AZURE_BATCH_MAX_BATCH_SIZE", "0"),
+        ("TDB_AZURE_BATCH_MAX_BATCH_SIZE", "-2"),
+    ],
+)
+def test_config_rejects_non_positive_numbers(monkeypatch, variable, value):
+    for name, env_value in _ENV.items():
+        monkeypatch.setenv(name, env_value)
+    monkeypatch.setenv(variable, value)
 
-    with pytest.raises(MissingConfigurationError, match="greater than 0"):
+    with pytest.raises(MissingConfigurationError, match=rf"{variable} \(input should be greater than 0\)"):
         AzureBatchConfig.from_env()
 
 
@@ -310,11 +352,14 @@ def test_failed_job_raises_without_being_cancelled():
     assert client.cancelled == []
 
 
-def test_job_that_never_finishes_times_out_and_is_cancelled():
+def test_job_that_never_finishes_times_out_and_is_cancelled(fake_clock):
     # Otherwise it would keep running, and billing, with nothing waiting for it.
     client = FakeClient({}, statuses=["Running"])
-    with pytest.raises(RuntimeError, match="did not finish within"):
-        _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+    with pytest.raises(RuntimeError, match="did not finish within 90s"):
+        _detector(client, poll_interval_seconds=30, timeout_seconds=90).predict(_QUESTION, ["a"])
+    # Checked at 0, 30, 60, and 90 seconds.
+    assert client.status_calls == 4
+    assert fake_clock.now == 90
     assert client.cancelled == ["job-1"]
 
 
@@ -338,7 +383,7 @@ def test_transient_status_errors_are_polled_through():
 def test_transient_status_errors_still_time_out():
     client = FakeClient({}, statuses=[TransientEndpointError("host unreachable")])
     with pytest.raises(RuntimeError, match="did not finish within"):
-        _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+        _detector(client).predict(_QUESTION, ["a"])
     assert client.cancelled == ["job-1"]
 
 
@@ -353,7 +398,7 @@ def test_other_status_errors_end_the_wait_and_cancel_the_job():
 def test_failed_cancel_is_logged_and_keeps_the_original_error(caplog):
     client = FakeClient({}, statuses=["Running"], cancel_error=RuntimeError("network down"))
     with pytest.raises(RuntimeError, match="did not finish within"):
-        _detector(client, timeout_seconds=0.0).predict(_QUESTION, ["a"])
+        _detector(client).predict(_QUESTION, ["a"])
     # Named in the log so the job can be cancelled by hand.
     assert "Could not cancel batch job job-1" in caplog.text
 

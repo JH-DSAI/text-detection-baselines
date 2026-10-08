@@ -39,7 +39,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
-from pydantic import PositiveInt, ValidationError
+from pydantic import PositiveFloat, PositiveInt, ValidationError
 from pydantic_core import ErrorDetails
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -80,7 +80,7 @@ AZURE_BATCH_ENV_PREFIX = f"{ENV_PREFIX}AZURE_BATCH_"
 
 
 class AzureBatchConfig(BaseSettings):
-    """Connection settings for the Azure ML batch endpoint."""
+    """Settings for the Azure ML batch endpoint and the jobs submitted to it."""
 
     # ``frozen`` because the detector holds one config for the life of a run.
     # ``env_ignore_empty`` so an exported-but-blank variable reads as unset and
@@ -113,6 +113,14 @@ class AzureBatchConfig(BaseSettings):
     # Blob prefix this package writes under, kept separate from the
     # application's ``class-<id>/assignment-<id>`` tree.
     blob_prefix: str = "text-detection-baselines"
+    # How often a submitted job is polled, and how long to wait for it before
+    # cancelling it.
+    poll_interval_seconds: PositiveFloat = 30.0
+    timeout_seconds: PositiveFloat = 3600.0
+    # Split a question's answers across jobs of at most this many. Unset sends
+    # them all in one job, which is the regime the endpoint's batch-level
+    # calibration assumes.
+    max_batch_size: PositiveInt | None = None
 
     @classmethod
     def from_env(cls) -> AzureBatchConfig:
@@ -351,7 +359,7 @@ class AzureBatchDetector(TextDetector):
     """Detector that scores submissions via the Azure ML batch endpoint.
 
     One :meth:`predict` call is one endpoint invocation (or one per chunk, when
-    *max_batch_size* is set): the pipeline builds a support set from the
+    :attr:`AzureBatchConfig.max_batch_size` is set): the pipeline builds a support set from the
     assignment question and calibrates thresholds across the answers it is
     given, so the composition of the batch is part of the input, not an
     implementation detail.
@@ -365,9 +373,6 @@ class AzureBatchDetector(TextDetector):
         seed: int,
         config: AzureBatchConfig | None = None,
         client: BatchEndpointClient | None = None,
-        poll_interval_seconds: float = 30.0,
-        timeout_seconds: float = 3600.0,
-        max_batch_size: int | None = None,
     ) -> None:
         """Initialize the detector.
 
@@ -381,18 +386,10 @@ class AzureBatchDetector(TextDetector):
                 first use when omitted.
             client:           Remote-operations implementation. A real
                 :class:`AzureMLBatchClient` is built on first use when omitted.
-            poll_interval_seconds: Delay between job status checks.
-            timeout_seconds:  Give up on a job after this long.
-            max_batch_size:   Split larger requests across several jobs. None
-                sends every answer for a question in a single job, which is the
-                regime the endpoint's batch-level calibration assumes.
         """
         super().__init__(model_name, normalized_scores, ood_margin, seed)
         self._config = config
         self._client = client
-        self.poll_interval_seconds = poll_interval_seconds
-        self.timeout_seconds = timeout_seconds
-        self.max_batch_size = max_batch_size
 
     @property
     def config(self) -> AzureBatchConfig:
@@ -433,7 +430,7 @@ class AzureBatchDetector(TextDetector):
                 ood_flags=np.empty(0, dtype=bool),
             )
 
-        chunk_size = self.max_batch_size or len(answers)
+        chunk_size = self.config.max_batch_size or len(answers)
         records: dict[str, dict[str, Any]] = {}
         for start in range(0, len(answers), chunk_size):
             chunk = answers[start : start + chunk_size]
@@ -459,7 +456,7 @@ class AzureBatchDetector(TextDetector):
             word_count=self.config.assignment_default_word_count,
             answers=submissions,
         )
-        LOGGER.info("Batch job %s submitted; polling every %.0fs", job_name, self.poll_interval_seconds)
+        LOGGER.info("Batch job %s submitted; polling every %.0fs", job_name, self.config.poll_interval_seconds)
 
         self._wait_for_job(client, job_name)
         return client.download_results(job_name)
@@ -478,7 +475,7 @@ class AzureBatchDetector(TextDetector):
 
         Raises:
             RuntimeError: If the job reaches a failure state or does not finish
-                within :attr:`timeout_seconds`.
+                within :attr:`AzureBatchConfig.timeout_seconds`.
         """
         try:
             status = self._poll_until_finished(client, job_name)
@@ -499,9 +496,11 @@ class AzureBatchDetector(TextDetector):
         error from the client ends the wait.
 
         Raises:
-            RuntimeError: If the job does not finish within :attr:`timeout_seconds`.
+            RuntimeError: If the job does not finish within
+                :attr:`AzureBatchConfig.timeout_seconds`.
         """
-        deadline = time.monotonic() + self.timeout_seconds
+        config = self.config
+        deadline = time.monotonic() + config.timeout_seconds
         status = None
         while True:
             try:
@@ -515,9 +514,9 @@ class AzureBatchDetector(TextDetector):
             if time.monotonic() >= deadline:
                 raise RuntimeError(
                     f"Azure ML batch job {job_name} did not finish within "
-                    f"{self.timeout_seconds:.0f}s (last state {status!r})",
+                    f"{config.timeout_seconds:.0f}s (last state {status!r})",
                 )
-            time.sleep(self.poll_interval_seconds)
+            time.sleep(config.poll_interval_seconds)
 
     @staticmethod
     def _cancel_job(client: BatchEndpointClient, job_name: str) -> None:
