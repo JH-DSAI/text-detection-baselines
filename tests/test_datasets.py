@@ -82,6 +82,19 @@ def test_load_file_dataset_keeps_rows_that_have_no_question(tmp_path):
     assert set(batch.questions.tolist()) == {""}
 
 
+def test_load_file_dataset_reads_a_null_question_or_category_as_missing(tmp_path):
+    # Not as the text "None", which would pass a detector's empty-question check
+    # and group every null-question row under one made-up question.
+    rows = [dict(row, question=None, contribution_level=None) for row in _ROWS]
+    path = tmp_path / "nulls.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+    assert set(batch.questions.tolist()) == {""}
+    assert set(batch.categories.tolist()) == {"unknown"}
+
+
 def test_dataset_dispatch_file_type(tmp_path):
     path = _write_records(tmp_path / "data.jsonl", as_array=False)
     batch = load_dataset(

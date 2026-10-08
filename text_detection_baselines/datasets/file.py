@@ -77,6 +77,15 @@ def _read_json_records(path: Path) -> list[dict[str, Any]]:
     return records
 
 
+def _optional_field(row: dict[str, Any], key: str, default: str) -> str:
+    """Read an optional field as text, treating JSON ``null`` as missing.
+
+    ``str(None)`` would otherwise turn a null into the literal text ``"None"``.
+    """
+    value = row.get(key)
+    return default if value is None else str(value)
+
+
 def load_file_dataset(
     path: Path,
     text_key: str,
@@ -88,7 +97,8 @@ def load_file_dataset(
 
     Unlike *text_key* and *label_key*, a missing *question_key* does not skip the
     row: a dataset with no question is still evaluable, and loads with
-    an empty question throughout.
+    an empty question throughout. A ``null`` question or category reads the same
+    as a missing one.
     """
     records = _read_json_records(path)
 
@@ -102,8 +112,8 @@ def load_file_dataset(
             continue
         texts.append(str(row[text_key]))
         labels.append(normalize_label(row[label_key]))
-        categories.append(str(row.get(category_key, "unknown")))
-        questions.append(str(row.get(question_key, "")))
+        categories.append(_optional_field(row, category_key, "unknown"))
+        questions.append(_optional_field(row, question_key, ""))
 
     if not texts:
         raise ValueError(f"No valid samples with required keys in {path}")
