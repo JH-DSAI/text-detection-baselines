@@ -99,6 +99,11 @@ def load_file_dataset(
     row: a dataset with no question is still evaluable, and loads with
     an empty question throughout. A ``null`` question or category reads the same
     as a missing one.
+
+    Raises:
+        ValueError: If the file holds no usable rows, a label is unrecognized,
+            or a text is ``null``, which would otherwise be scored as the text
+            ``"None"``.
     """
     records = _read_json_records(path)
 
@@ -107,9 +112,11 @@ def load_file_dataset(
     categories: list[str] = []
     questions: list[str] = []
 
-    for row in records:
+    for number, row in enumerate(records, start=1):
         if text_key not in row or label_key not in row:
             continue
+        if row[text_key] is None:
+            raise ValueError(f"Null {text_key!r} in record {number} of {path}")
         texts.append(str(row[text_key]))
         labels.append(normalize_label(row[label_key]))
         categories.append(_optional_field(row, category_key, "unknown"))

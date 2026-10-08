@@ -95,6 +95,17 @@ def test_load_file_dataset_reads_a_null_question_or_category_as_missing(tmp_path
     assert set(batch.categories.tolist()) == {"unknown"}
 
 
+def test_load_file_dataset_rejects_a_null_text(tmp_path):
+    # Rather than scoring the text "None", or dropping the row and quietly
+    # changing what is evaluated.
+    rows = [*_ROWS[:2], dict(_ROWS[2], answer=None), *_ROWS[3:]]
+    path = tmp_path / "null-text.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Null 'answer' in record 3"):
+        load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+
 def test_dataset_dispatch_file_type(tmp_path):
     path = _write_records(tmp_path / "data.jsonl", as_array=False)
     batch = load_dataset(
