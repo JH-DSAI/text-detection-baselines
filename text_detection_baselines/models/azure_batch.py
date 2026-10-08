@@ -321,6 +321,9 @@ class AzureMLBatchClient:
                 output_name=ANALYSIS_REPORTS_OUTPUT,
             )
 
+            # The SDK writes a named output under ``named-outputs/``, except for
+            # a batch job that is not a pipeline job, whose scoring output it
+            # writes straight into the download folder.
             output_dir = Path(tmpdir) / "named-outputs" / ANALYSIS_REPORTS_OUTPUT
             if not output_dir.exists():
                 output_dir = Path(tmpdir)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -607,12 +608,18 @@ def test_sdk_clients_share_one_credential_with_the_full_default_chain(monkeypatc
 # ---------------------------------------------------------------------------
 
 
-def test_parse_analysis_reports_reads_records_and_skips_sidecars(tmp_path):
-    (tmp_path / "000000.txt.json").write_text(json.dumps(_record("000000.txt", "No action")), encoding="utf-8")
-    (tmp_path / "000000.txt.md").write_text("# report", encoding="utf-8")
-    # The batch sidecar has no ``decision`` and must not be read as a verdict.
+def _write_report(folder, submission_id, payload=None):
+    """Write one submission's report and verdict record, as the pipeline names them."""
+    folder.mkdir(parents=True, exist_ok=True)
+    record = json.dumps(_record(submission_id, "No action")) if payload is None else payload
+    (folder / f"{submission_id}.json").write_text(record, encoding="utf-8")
+    (folder / f"{submission_id}.md").write_text("# report", encoding="utf-8")
+
+
+def test_parse_analysis_reports_reads_the_record_beside_each_report(tmp_path):
+    _write_report(tmp_path, "000000.txt")
+    # The batch sidecar has no report beside it, so it is not read as a verdict.
     (tmp_path / "batch_verdict.json").write_text(json.dumps({"alpha": 0.05, "docs": []}), encoding="utf-8")
-    (tmp_path / "broken.json").write_text("{not json", encoding="utf-8")
 
     records = parse_analysis_reports(tmp_path)
 
@@ -620,10 +627,57 @@ def test_parse_analysis_reports_reads_records_and_skips_sidecars(tmp_path):
     assert records["000000.txt"]["decision"] == "No action"
 
 
-def test_parse_analysis_reports_skips_records_without_submission_id(tmp_path):
-    payload = {"decision": "Flag for review", "is_flagged": True, "score": 0.9, "tau": 0.7}
-    (tmp_path / "essay-01.docx.json").write_text(json.dumps(payload), encoding="utf-8")
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "{not json",
+        json.dumps(["not", "an", "object"]),
+        json.dumps({"submission_id": "000000.txt", "score": 0.9, "tau": 0.7}),
+        json.dumps({"decision": "Flag for review", "is_flagged": True, "score": 0.9, "tau": 0.7}),
+    ],
+    ids=["unreadable", "not-an-object", "no-decision", "no-submission-id"],
+)
+def test_parse_analysis_reports_skips_an_unusable_record_with_a_warning(tmp_path, caplog, payload):
+    _write_report(tmp_path, "000000.txt", payload)
 
     records = parse_analysis_reports(tmp_path)
 
-    assert list(records) == []
+    assert records == {}
+    assert "Skipping" in caplog.text
+
+
+def _download(monkeypatch, write_outputs):
+    """Run :meth:`AzureMLBatchClient.download_results` against a stub ``jobs.download``.
+
+    *write_outputs* is called with the download folder, standing in for the SDK
+    writing the job's output into it.
+
+    Returns:
+        The parsed records and the stub ML client.
+    """
+    ml_client = MagicMock()
+    ml_client.jobs.download.side_effect = lambda **kwargs: write_outputs(Path(kwargs["download_path"]))
+    client = AzureMLBatchClient(_config())
+    monkeypatch.setattr(client, "_ml", lambda: ml_client)
+
+    return client.download_results("job-1"), ml_client
+
+
+def test_download_results_reads_the_analysis_reports_output(monkeypatch):
+    def write_outputs(root):
+        _write_report(root / "named-outputs" / "analysis_reports", "000000.txt")
+        # Not the analysis_reports output, so not read.
+        _write_report(root / "named-outputs" / "other_output", "000001.txt")
+
+    records, ml_client = _download(monkeypatch, write_outputs)
+
+    assert list(records) == ["000000.txt"]
+    ml_client.jobs.download.assert_called_once()
+    assert ml_client.jobs.download.call_args.kwargs["name"] == "job-1"
+    assert ml_client.jobs.download.call_args.kwargs["output_name"] == "analysis_reports"
+
+
+def test_download_results_falls_back_to_the_download_folder(monkeypatch):
+    records, _ = _download(monkeypatch, lambda root: _write_report(root, "000000.txt"))
+
+    assert list(records) == ["000000.txt"]
