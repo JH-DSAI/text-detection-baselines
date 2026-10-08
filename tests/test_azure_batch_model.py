@@ -534,12 +534,10 @@ def test_parse_analysis_reports_reads_records_and_skips_sidecars(tmp_path):
     assert records["000000.txt"]["decision"] == "No action"
 
 
-def test_parse_analysis_reports_falls_back_to_the_filename(tmp_path):
-    # ``doc_id`` carries the submission's own extension, so the fallback strips
-    # only the ``.json`` the render step appended.
+def test_parse_analysis_reports_skips_records_without_submission_id(tmp_path):
     payload = {"decision": "Flag for review", "is_flagged": True, "score": 0.9, "tau": 0.7}
     (tmp_path / "essay-01.docx.json").write_text(json.dumps(payload), encoding="utf-8")
 
     records = parse_analysis_reports(tmp_path)
 
-    assert list(records) == ["essay-01.docx"]
+    assert list(records) == []

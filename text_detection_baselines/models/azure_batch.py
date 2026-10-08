@@ -324,22 +324,25 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
         output_dir: Directory holding the job's ``analysis_reports`` output.
 
     Returns:
-        Verdict records keyed by submission id.
+        Verdict records keyed by submission id (input filename).
     """
     records: dict[str, dict[str, Any]] = {}
-    for json_file in sorted(output_dir.rglob("*.json")):
-        try:
-            record = json.loads(json_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            LOGGER.warning("Skipping unreadable verdict file %s", json_file)
-            continue
+    # Iterate over reports to find JSON verdicts, as app does
+    for md_file in sorted(output_dir.rglob("*.md")):
+        json_file = md_file.with_suffix(".json")
+        if json_file.exists():
+            try:
+                record = json.loads(json_file.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                LOGGER.warning("Skipping unreadable verdict file %s", json_file)
+                continue
 
-        if not isinstance(record, dict) or "decision" not in record:
-            # batch_verdict.json and any other sidecar living in the same folder.
-            continue
+            if not isinstance(record, dict) or "decision" not in record or "submission_id" not in record:
+                LOGGER.warning("Skipping malformatted verdict file %s", json_file)
+                continue
 
-        submission_id = record.get("submission_id") or json_file.name[: -len(".json")]
-        records[str(submission_id)] = record
+            submission_id = record["submission_id"]
+            records[str(submission_id)] = record
 
     return records
 
