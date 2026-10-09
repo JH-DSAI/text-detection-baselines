@@ -106,7 +106,7 @@ blobs under that prefix after a few days is a sensible backstop.
 Verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is a
 window-max cosine judged against `tau`, a *per-document* length-matched conformal
 threshold, so raw scores are not comparable across submissions; the reported score is
-the margin `score - tau`, which is, and which is unbounded rather than in `[0, 1]`.
+the margin `score - tau`, which is unbounded rather than in `[0, 1]`.
 
 | harness output | endpoint field |
 | --- | --- |

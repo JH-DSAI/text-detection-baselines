@@ -351,10 +351,8 @@ class AzureMLBatchClient:
 def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
     """Read ``<doc_id>.json`` verdict records from a downloaded output folder.
 
-    The record's own ``submission_id`` is authoritative; the filename is only a
-    fallback, since ``doc_id`` includes the submission's file extension and so
-    survives :meth:`~pathlib.Path.stem` badly (``0001.txt.json`` stems to
-    ``0001.txt`` only by accident of there being exactly one extension left).
+    Each record's ``submission_id`` is its input (submission) filename, used as
+    its key in the returned dictionary.
 
     Args:
         output_dir: Directory holding the job's ``analysis_reports`` output.

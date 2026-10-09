@@ -46,10 +46,10 @@ class TextDetector(ABC):
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
         """Score one question's answers.
 
-        The unit of invocation is an question, not a single text: one question
+        The unit of invocation is a question, not a single text: one question
         with the one-or-more answers written in response to it. This mirrors a
         real-world application in education in which we might plausibly receive
-        all answers for an question at once, allowing us to utilize batch
+        all answers for a question at once, allowing us to utilize batch
         statistics in prediction.
 
         Args:
