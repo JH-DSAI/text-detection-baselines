@@ -19,6 +19,17 @@ pixi run main
 
 The first run resolves a ~800 MB Python environment, most of it PyTorch.
 
+## Configuration
+
+Settings are read from `TDB_*` environment variables, falling back to a `.env` file
+in the working directory. [.env.example](.env.example) lists every variable: copy
+it to `.env` and fill in what you need. A variable left blank counts as unset.
+
+| variables | configure |
+| --- | --- |
+| `TDB_GEDE_PATH` | where the `gede` dataset is prepared and looked up; see [datasets/README.md](datasets/README.md) |
+| `TDB_AZURE_BATCH_*` | the `azure-batch` model's endpoint; see [The `azure-batch` model](#the-azure-batch-model) |
+
 ## Datasets
 
 Two datasets
@@ -52,9 +63,10 @@ pixi run main -- --register-file-dataset mydata=/path/to/mydata.jsonl
 
 ## Models
 
-Every model currently registered in [models/](text_detection_baselines/models/) is a **stub**.
-None of them are trained, and none should be treated as a working detector — they
-exist to exercise the evaluation pipeline end to end with realistic-looking outputs.
+Apart from `azure-batch`, every model registered in
+[models/](text_detection_baselines/models/) is a **stub**. None of them are trained,
+and none should be treated as a working detector — they exist to exercise the
+evaluation pipeline end to end with realistic-looking outputs.
 
 | name | what it does |
 | --- | --- |
@@ -62,10 +74,82 @@ exist to exercise the evaluation pipeline end to end with realistic-looking outp
 | `dummy-raw` | Same arbitrary weights, raw logit reported as an unnormalized score. |
 | `length` | Hand-written heuristic: longer texts with lower type-token ratio and less punctuation score as more machine-like. An actual (weak, unvalidated) hypothesis, unlike the `dummy-*` pair. |
 | `smollm2` | Prompts a small local LLM. Not a default; opt in with `--model smollm2`. |
+| `azure-batch` | The real HopDetect detector, via its Azure ML batch endpoint. Not a default; needs credentials and makes remote calls. |
 
 The `dummy-*` weights were picked by hand and fit to nothing. Their metrics measure
 the harness, not detection quality, and any apparent skill they show on a dataset is
 an artifact of that dataset's length distribution.
+
+Models are invoked **once per question**: one question together with the answers
+written in response to it. This mirrors a real-world educational deployment, which
+plausibly receives all submissions for an assignment at once and can use batch
+statistics in prediction. Rows are grouped by their `--question-key` field, so a
+dataset spanning many prompts produces one invocation per prompt. The stub models
+ignore the question and score each answer on its own; `azure-batch` needs it, because
+the pipeline builds a per-assignment support set from the prompt, and a dataset with
+any answer that has no question is rejected before anything runs.
+
+### The `azure-batch` model
+
+One `predict` call is one batch job: the answers are uploaded to blob storage, the
+endpoint is invoked, the job is polled to completion, and the per-submission verdicts
+are downloaded. Expect **minutes per invocation**, and a real cost per run.
+Dropped connections while polling are retried until the job's timeout
+(`TDB_AZURE_BATCH_TIMEOUT_SECONDS`, an hour by default). A job that
+times out, is interrupted with Ctrl-C, or can no longer be polled is cancelled rather
+than left running; its name is logged in case the cancellation itself fails.
+Either way, the answers uploaded for a job are deleted from blob storage once it is
+over. A process killed before it can clean up leaves them under
+`TDB_AZURE_BATCH_BLOB_PREFIX`, so a lifecycle rule on the container that deletes
+blobs under that prefix after a few days is a sensible backstop.
+
+Verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is a
+window-max cosine judged against `tau`, a *per-document* length-matched conformal
+threshold, so raw scores are not comparable across submissions; the reported score is
+the margin `score - tau`, which is unbounded rather than in `[0, 1]`.
+
+| harness output | endpoint field |
+| --- | --- |
+| `predictions` | `is_flagged` (decision `Flag for review`) |
+| `ood_flags` | decision `Inconclusive` — a submission the detector declined to assess |
+| `scores` | `score - tau` |
+
+Each question is its own batch job, and jobs run one after another, so start with
+a single question. These commands copy the 12 answers to one question out of the
+bundled `demo` data and evaluate them in one job, using the `azure` environment,
+which has the Azure SDKs:
+
+```bash
+grep '"question": "A committee must decide the future of seasonal water rationing' \
+  text_detection_baselines/datasets/data/demo.jsonl > datasets/demo-one-question.jsonl
+pixi run -e azure main --register-file-dataset one-question=datasets/demo-one-question.jsonl \
+  --exclude-dataset demo --model azure-batch
+```
+
+Keep `--exclude-dataset demo`: `--model` and `--register-file-dataset` add to the
+default selection rather than replacing it, and `azure-batch` on the whole `demo`
+dataset is 32 jobs, one per question. The default stub models run as well, at no
+real cost. The `demo` text is synthetic, so this run checks the wiring, not the
+detector.
+
+Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
+or in `.env` (see [Configuration](#configuration)).
+Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
+`TDB_AZURE_BATCH_DATASTORE_NAME`, `TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`,
+`TDB_AZURE_BATCH_ML_RESOURCE_GROUP`, `TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+See [.env.example](.env.example) for optional variables and defaults.
+
+The whole configuration is read and validated at once, on the first call that
+needs it, so a misconfiguration is reported as a single list of problems rather
+than as an Azure SDK error several minutes in. That includes a
+`TDB_AZURE_BATCH_*` key in `.env` that matches no setting, which is usually a
+typo. A misspelled variable exported in the shell cannot be detected this way
+and is ignored.
+
+Authentication goes through `azure-identity`'s `DefaultAzureCredential`: locally,
+`az login` is enough; for a headless run, export a service principal as
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`. Those must be
+set in the environment, not in `.env`, which is read only for `TDB_*` settings.
 
 ## Metrics
 

@@ -6,10 +6,11 @@ import numpy as np
 import torch
 from torch import nn
 
-from .base import StubModelOutput, StubTextDetector
+from .base import ModelOutput, TextDetector
+from .features import surface_features
 
 
-class TorchLinearStubDetector(StubTextDetector):
+class TorchLinearStubDetector(TextDetector):
     """Dummy detector stub backed by a PyTorch layer with arbitrary weights.
 
     The weights are hard-coded constants chosen by hand and fit to no data, so
@@ -21,6 +22,9 @@ class TorchLinearStubDetector(StubTextDetector):
     When *normalized_scores* is True the raw logit is passed through a sigmoid
     and scores are in ``[0, 1]``.  When False the raw logit is used directly as
     an unnormalized score.
+
+    The question is ignored: the layer reads surface statistics of
+    each answer alone.
     """
 
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
@@ -35,8 +39,8 @@ class TorchLinearStubDetector(StubTextDetector):
             self._layer.weight[:] = torch.tensor(weights).reshape(self._layer.weight.shape)
             self._layer.bias[:] = torch.tensor([bias])
 
-    def predict(self, texts: list[str]) -> StubModelOutput:
-        feats = self._feature_matrix(texts)
+    def predict(self, question: str, answers: list[str]) -> ModelOutput:
+        feats = surface_features(answers)
         raw = self._forward(feats)
 
         # ``confidence`` is distance from the decision boundary, so it is *low*
@@ -53,7 +57,7 @@ class TorchLinearStubDetector(StubTextDetector):
 
         # Flagged when the model is unconfident, or the text is too short to judge.
         ood = (confidence < self.ood_margin) | (feats[:, 0] < 40)
-        return StubModelOutput(scores=scores, predictions=preds, ood_flags=ood)
+        return ModelOutput(scores=scores, predictions=preds, ood_flags=ood)
 
     def _forward(self, feats: np.ndarray) -> np.ndarray:
         x = torch.tensor(feats, dtype=torch.float32)

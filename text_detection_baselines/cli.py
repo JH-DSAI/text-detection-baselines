@@ -26,17 +26,27 @@ from rich.table import Table
 from .datasets import (
     DEFAULT_CATEGORY_KEY,
     DEFAULT_LABEL_KEY,
+    DEFAULT_QUESTION_KEY,
     DEFAULT_TEXT_KEY,
     GEDE_PREPARE_HINT,
+    DatasetError,
     DatasetSpec,
+    FileDatasetBatch,
     dataset_available,
     get_dataset_spec,
     get_default_dataset_names,
     list_registered_datasets,
+    load_dataset,
     register_file_dataset,
 )
 from .evaluate import build_results_tree, evaluate_model_on_dataset
-from .models import build_model, get_default_model_names, list_registered_models
+from .models import (
+    ModelUnavailableError,
+    TextDetector,
+    build_model,
+    get_default_model_names,
+    list_registered_models,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +95,56 @@ def _raise_for_unavailable_dataset(spec: DatasetSpec) -> None:
             "Point --register-file-dataset at an existing file, or choose another dataset.",
         ]
     raise click.ClickException("\n".join(lines))
+
+
+def _load_evaluable_dataset(spec: DatasetSpec) -> FileDatasetBatch:
+    """Load a dataset, failing with an actionable message if it cannot be evaluated.
+
+    Run for every selected dataset before any model is, so that a bad file is
+    reported at once rather than after the (dataset, model) pairs ahead of it,
+    which for a remote model can take hours, have run and had their results
+    discarded.
+    """
+    try:
+        # We are loading a local dataset from JSON and we assume the user trusts it
+        batch = load_dataset(  # nosec: B615[huggingface_unsafe_download]
+            dataset_type=spec.dataset_type,
+            path=spec.path,
+            text_key=spec.text_key,
+            label_key=spec.label_key,
+            category_key=spec.category_key,
+            question_key=spec.question_key,
+        )
+    except DatasetError as exc:
+        raise click.ClickException(f"Dataset '{spec.name}' could not be loaded: {exc}") from exc
+
+    present = set(batch.labels.tolist())
+    if present != {0, 1}:
+        only = "human" if present == {0} else "machine"
+        raise click.ClickException(
+            f"Dataset '{spec.name}' has only {only} labels ({spec.path}); evaluation needs both.",
+        )
+    return batch
+
+
+def _raise_for_missing_questions(spec: DatasetSpec, batch: FileDatasetBatch, model: TextDetector) -> None:
+    """Fail when a model that needs a question would be given answers without one.
+
+    Checked up front for the same reason as :func:`_load_evaluable_dataset`: the
+    model itself only fails on reaching the first such answer, which may come
+    after it has already been invoked for others.
+    """
+    if not model.requires_question:
+        return
+    missing = sum(1 for question in batch.questions.tolist() if not str(question).strip())
+    if not missing:
+        return
+
+    raise click.ClickException(
+        f"Model '{model.model_name}' needs a question for every answer, but {missing} of "
+        f"{len(batch)} answers in dataset '{spec.name}' have none. The question field may "
+        "not be specified correctly.",
+    )
 
 
 class NamePathParamType(click.ParamType):
@@ -193,7 +253,7 @@ def render_console_tables(tree: dict[str, Any]) -> None:
     overall_rows = _flatten_overall(tree)
     summary = Table(
         title="Text Detection Metrics",
-        caption="All models are stubs. dummy-* use fixed, arbitrary weights fit to nothing.",
+        caption="dummy-* use fixed, arbitrary weights fit to nothing.",
         show_lines=False,
     )
     for col in ("dataset", "model", "AUROC", "AUROC@1%", "AP", "FPR@tau", "TPR@tau", "CalGap", "OOD%", "tau"):
@@ -460,6 +520,17 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "datasets keep their own schema."
     ),
 )
+@click.option(
+    "--question-key",
+    type=str,
+    default=DEFAULT_QUESTION_KEY,
+    show_default=True,
+    help=(
+        "Field name for the question in datasets registered via "
+        "--register-file-dataset. Models are invoked once per distinct prompt; "
+        "built-in datasets keep their own schema."
+    ),
+)
 @click.option("--seed", type=int, default=7, show_default=True, help="Random seed for model stubs.")
 @click.option(
     "--ood-margin",
@@ -483,6 +554,7 @@ def main(
     text_key: str,
     label_key: str,
     category_key: str,
+    question_key: str,
     seed: int,
     ood_margin: float,
 ) -> None:
@@ -501,6 +573,7 @@ def main(
             text_key=text_key,
             label_key=label_key,
             category_key=category_key,
+            question_key=question_key,
         )
         runtime_dataset_names.append(name)
 
@@ -562,24 +635,34 @@ def main(
     # Resolved and checked before any model is built: constructing ``smollm2``
     # downloads weights, which should not happen only to fail on a missing dataset.
     specs = [get_dataset_spec(name) for name in selected_datasets]
+    batches: dict[str, FileDatasetBatch] = {}
     for spec in specs:
         _raise_for_unavailable_dataset(spec)
+        batches[spec.name] = _load_evaluable_dataset(spec)
 
     model_objs = [build_model(name, ood_margin=ood_margin, seed=seed) for name in selected_models]
+
+    for spec in specs:
+        for model in model_objs:
+            _raise_for_missing_questions(spec, batches[spec.name], model)
 
     run_results: list[tuple[str, str, dict, dict]] = []
 
     for dataset in specs:
         for model in model_objs:
             LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset.name)
-            overall, per_cat = evaluate_model_on_dataset(
-                dataset_path=dataset.path,
-                model=model,
-                target_alpha=target_alpha,
-                text_key=dataset.text_key,
-                label_key=dataset.label_key,
-                category_key=dataset.category_key,
-            )
+            try:
+                overall, per_cat = evaluate_model_on_dataset(
+                    dataset_path=dataset.path,
+                    model=model,
+                    target_alpha=target_alpha,
+                    text_key=dataset.text_key,
+                    label_key=dataset.label_key,
+                    category_key=dataset.category_key,
+                    question_key=dataset.question_key,
+                )
+            except ModelUnavailableError as exc:
+                raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
             run_results.append((dataset.name, model.model_name, overall, per_cat))
 
     tree = build_results_tree(run_results)
@@ -597,11 +680,19 @@ def main(
     LOGGER.info("Evaluation complete")
 
 
+def _configure_logging() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    # At INFO the Azure SDKs log every HTTP request with its headers (one per uploaded
+    # answer and per job status poll) and each credential they try. Their warnings and
+    # errors still come through.
+    logging.getLogger("azure").setLevel(logging.WARNING)
+
+
 if __name__ == "__main__":
     # Configured at the process entry point rather than inside ``main``: ``basicConfig``
     # binds a handler to the ``sys.stderr`` in effect at the first call and is a no-op
     # afterwards, so calling it from the command body silently sends the logs of every
     # later in-process invocation to the first caller's stream, which causes problems in
     # testing.
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    _configure_logging()
     main()

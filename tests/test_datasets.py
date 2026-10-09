@@ -18,7 +18,7 @@ from text_detection_baselines.datasets import (
     register_file_dataset,
     resolve_gede_path,
 )
-from text_detection_baselines.datasets.file import FileDatasetBatch, load_file_dataset
+from text_detection_baselines.datasets.file import DatasetError, FileDatasetBatch, load_file_dataset
 
 _ROWS = [
     {"answer": "A short human answer.", "label": "real", "contribution_level": "Human"},
@@ -53,6 +53,77 @@ def test_load_file_dataset_reads_both_encodings(tmp_path, as_array):
     assert batch.labels.dtype == np.int64 or batch.labels.dtype == np.int32
     assert set(np.unique(batch.labels).tolist()) == {0, 1}
     assert "Human" in set(batch.categories.tolist())
+
+
+def test_load_file_dataset_reads_questions(tmp_path):
+    rows = [dict(row, question=f"Q{index}") for index, row in enumerate(_ROWS)]
+    path = tmp_path / "with-questions.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    batch = load_file_dataset(
+        path,
+        text_key="answer",
+        label_key="label",
+        category_key="contribution_level",
+        question_key="question",
+    )
+
+    assert len(batch.questions) == len(_ROWS)
+    assert batch.questions[0] == "Q0"
+
+
+def test_load_file_dataset_keeps_rows_that_have_no_question(tmp_path):
+    # A dataset with no question is still evaluable; only a missing
+    # text or label skips the row.
+    path = _write_records(tmp_path / "data.jsonl", as_array=False)
+    batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+    assert len(batch) == len(_ROWS)
+    assert set(batch.questions.tolist()) == {""}
+
+
+def test_load_file_dataset_reads_a_null_question_or_category_as_missing(tmp_path):
+    # Not as the text "None", which would pass a detector's empty-question check
+    # and group every null-question row under one made-up question.
+    rows = [dict(row, question=None, contribution_level=None) for row in _ROWS]
+    path = tmp_path / "nulls.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    batch = load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+    assert set(batch.questions.tolist()) == {""}
+    assert set(batch.categories.tolist()) == {"unknown"}
+
+
+def test_load_file_dataset_rejects_a_null_text(tmp_path):
+    # Rather than scoring the text "None", or dropping the row and quietly
+    # changing what is evaluated.
+    rows = [*_ROWS[:2], dict(_ROWS[2], answer=None), *_ROWS[3:]]
+    path = tmp_path / "null-text.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    with pytest.raises(DatasetError, match="Null 'answer' in record 3"):
+        load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
+
+
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (b'[{"answer": "a", "label": "real"},', "Invalid JSON in"),
+        (b'{"answer": "a", "label": "real"}\n{"answer": "b",\n', "Invalid JSON on line 2"),
+        (b'{"answer": "a", "label": "maybe"}\n', "Unsupported 'label' value 'maybe' in record 1"),
+        # Usually a --text-key or --label-key that does not match the file.
+        (b'{"text": "a", "label": "real"}\n', "No records in .* have both 'answer' and 'label'"),
+        (b"\xff\xfe\x00\x00", "Not UTF-8 text"),
+    ],
+    ids=["json-array", "json-lines", "label", "keys", "encoding"],
+)
+def test_load_file_dataset_names_what_is_wrong_with_the_file(tmp_path, content, message):
+    path = tmp_path / "bad.jsonl"
+    path.write_bytes(content)
+
+    with pytest.raises(DatasetError, match=message):
+        load_file_dataset(path, text_key="answer", label_key="label", category_key="contribution_level")
 
 
 def test_dataset_dispatch_file_type(tmp_path):
@@ -116,6 +187,19 @@ def test_resolve_gede_path_honours_the_environment_override(monkeypatch, tmp_pat
     override = tmp_path / "elsewhere" / "gede_essays.jsonl"
     monkeypatch.setenv(GEDE_PATH_ENV_VAR, str(override))
     assert resolve_gede_path() == override
+
+
+def test_resolve_gede_path_reads_the_override_from_dotenv(dotenv, tmp_path):
+    override = tmp_path / "elsewhere" / "gede_essays.jsonl"
+    # The azure-batch keys share this model's prefix; they must be left to their own model.
+    dotenv(f"{GEDE_PATH_ENV_VAR}={override}", "TDB_AZURE_BATCH_ML_WORKSPACE_NAME=ws-1")
+    assert resolve_gede_path() == override
+
+
+def test_resolve_gede_path_treats_a_blank_override_as_unset(monkeypatch):
+    unset = resolve_gede_path()
+    monkeypatch.setenv(GEDE_PATH_ENV_VAR, "")
+    assert resolve_gede_path() == unset
 
 
 def test_resolve_gede_path_falls_back_to_the_cache_directory(monkeypatch, tmp_path):
