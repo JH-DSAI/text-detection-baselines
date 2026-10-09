@@ -55,24 +55,30 @@ def _record(submission_id, decision, *, score=0.9, tau=0.7, is_flagged=None, inc
 
 
 class FakeClient:
-    """Records what was submitted and cancelled, and replays canned statuses and verdicts.
+    """Records what was submitted, cancelled, and deleted, and replays canned statuses and verdicts.
 
     A status that is an exception is raised rather than returned. The last status
-    repeats for as long as the job is polled.
+    repeats for as long as the job is polled. A *submit_error* is raised after the
+    submission is recorded, as if the upload had failed partway.
     """
 
-    def __init__(self, records, statuses=("Completed",), cancel_error=None):
+    def __init__(self, records, statuses=("Completed",), cancel_error=None, submit_error=None, delete_error=None):
         self.records = records
         self.statuses = list(statuses)
         self.cancel_error = cancel_error
+        self.submit_error = submit_error
+        self.delete_error = delete_error
         self.submissions = []
         self.status_calls = 0
         self.cancelled = []
+        self.deleted = []
 
     def submit(self, *, run_prefix, question, word_count, answers):
         self.submissions.append(
             {"run_prefix": run_prefix, "question": question, "word_count": word_count, "answers": answers},
         )
+        if self.submit_error is not None:
+            raise self.submit_error
         return f"job-{len(self.submissions)}"
 
     def job_status(self, job_name):
@@ -89,6 +95,11 @@ class FakeClient:
 
     def download_results(self, job_name):
         return self.records
+
+    def delete_inputs(self, run_prefix):
+        self.deleted.append(run_prefix)
+        if self.delete_error is not None:
+            raise self.delete_error
 
 
 def _config(**overrides):
@@ -370,6 +381,7 @@ def test_predict_chunks_large_batches_and_keeps_row_order():
     # Filenames stay globally indexed across chunks, so chunk two is 2 and 3.
     assert list(client.submissions[1]["answers"]) == ["000002.txt", "000003.txt"]
     np.testing.assert_allclose(output.scores, [0.0, 0.1, 0.2, 0.3, 0.4])
+    assert client.deleted == [submission["run_prefix"] for submission in client.submissions]
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +455,43 @@ def test_failed_cancel_is_logged_and_keeps_the_original_error(caplog):
         _detector(client).predict(_QUESTION, ["a"])
     # Named in the log so the job can be cancelled by hand.
     assert "Could not cancel batch job job-1" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Uploaded input cleanup
+# ---------------------------------------------------------------------------
+
+
+def test_inputs_are_deleted_once_the_results_are_in():
+    client = FakeClient({"000000.txt": _record("000000.txt", "No action")})
+    _detector(client).predict(_QUESTION, ["a"])
+    assert client.deleted == [client.submissions[0]["run_prefix"]]
+
+
+@pytest.mark.parametrize(
+    "client_kwargs",
+    [
+        {"statuses": ["Failed"]},
+        {"statuses": [KeyboardInterrupt()]},
+        {"submit_error": ConnectionError("upload failed partway")},
+    ],
+    ids=["failed-job", "interrupted", "failed-submit"],
+)
+def test_inputs_are_deleted_when_the_job_is_abandoned(client_kwargs):
+    client = FakeClient({}, **client_kwargs)
+    with pytest.raises((RuntimeError, KeyboardInterrupt, ConnectionError)):
+        _detector(client).predict(_QUESTION, ["a"])
+    assert client.deleted == [client.submissions[0]["run_prefix"]]
+
+
+def test_failed_delete_is_logged_and_does_not_fail_the_run(caplog):
+    client = FakeClient({"000000.txt": _record("000000.txt", "No action")}, delete_error=RuntimeError("forbidden"))
+
+    output = _detector(client).predict(_QUESTION, ["a"])
+
+    assert output.predictions.tolist() == [0]
+    # Named in the log so the inputs can be deleted by hand.
+    assert f"Could not delete uploaded inputs under {client.submissions[0]['run_prefix']}" in caplog.text
 
 
 # ---------------------------------------------------------------------------
@@ -577,6 +626,25 @@ def test_cancel_requests_cancellation_of_the_named_job(monkeypatch):
     client.cancel("job-1")
 
     ml_client.jobs.begin_cancel.assert_called_once_with("job-1")
+
+
+def test_delete_inputs_deletes_every_blob_under_the_run_prefix(monkeypatch):
+    container = MagicMock()
+    container.list_blobs.return_value = [
+        SimpleNamespace(name="run-1/assignment.json"),
+        SimpleNamespace(name="run-1/submissions/000000.txt"),
+    ]
+    blob_service = MagicMock()
+    blob_service.get_container_client.return_value = container
+    client = AzureMLBatchClient(_config())
+    monkeypatch.setattr(client, "_blob", lambda: blob_service)
+
+    client.delete_inputs("run-1")
+
+    # The trailing slash keeps the prefix from also matching a longer one.
+    container.list_blobs.assert_called_once_with(name_starts_with="run-1/")
+    deleted = [call.args[0] for call in container.delete_blob.call_args_list]
+    assert deleted == ["run-1/assignment.json", "run-1/submissions/000000.txt"]
 
 
 def test_sdk_clients_share_one_credential_with_the_full_default_chain(monkeypatch):

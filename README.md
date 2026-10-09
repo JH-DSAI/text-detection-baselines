@@ -98,6 +98,10 @@ Dropped connections while polling are retried until the job's timeout
 (`TDB_AZURE_BATCH_TIMEOUT_SECONDS`, an hour by default). A job that
 times out, is interrupted with Ctrl-C, or can no longer be polled is cancelled rather
 than left running; its name is logged in case the cancellation itself fails.
+Either way, the answers uploaded for a job are deleted from blob storage once it is
+over. A process killed before it can clean up leaves them under
+`TDB_AZURE_BATCH_BLOB_PREFIX`, so a lifecycle rule on the container that deletes
+blobs under that prefix after a few days is a sensible backstop.
 
 Verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is a
 window-max cosine judged against `tau`, a *per-document* length-matched conformal

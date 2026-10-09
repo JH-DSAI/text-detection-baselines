@@ -199,6 +199,10 @@ class BatchEndpointClient(Protocol):
         """Return the finished job's verdict records, keyed by submission id."""
         ...
 
+    def delete_inputs(self, run_prefix: str) -> None:
+        """Delete whatever :meth:`submit` uploaded under *run_prefix*, if anything."""
+        ...
+
 
 class AzureMLBatchClient:
     """:class:`BatchEndpointClient` backed by the real Azure ML SDK."""
@@ -329,6 +333,18 @@ class AzureMLBatchClient:
                 output_dir = Path(tmpdir)
 
             return parse_analysis_reports(output_dir)
+
+    def delete_inputs(self, run_prefix: str) -> None:
+        """Delete every blob under the run's prefix, one request each.
+
+        Listed rather than taken from what :meth:`submit` meant to upload, so a
+        submission that failed partway is cleaned up too.
+        """
+        container = self._blob().get_container_client(self.config.storage_container)
+        # Batch delete isn't supported on all storage accounts, according to
+        # Claude, so we delete one-by-one
+        for blob in container.list_blobs(name_starts_with=f"{run_prefix}/"):
+            container.delete_blob(blob.name)
 
 
 def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
@@ -497,16 +513,21 @@ class AzureBatchDetector(TextDetector):
         submissions = {self._submission_filename(first_index + offset): text for offset, text in enumerate(answers)}
 
         LOGGER.info("Submitting %d answer(s) to endpoint %s", len(submissions), self.config.endpoint_name)
-        job_name = client.submit(
-            run_prefix=run_prefix,
-            question=question,
-            word_count=self.config.assignment_default_word_count,
-            answers=submissions,
-        )
-        LOGGER.info("Batch job %s submitted; polling every %.0fs", job_name, self.config.poll_interval_seconds)
+        try:
+            job_name = client.submit(
+                run_prefix=run_prefix,
+                question=question,
+                word_count=self.config.assignment_default_word_count,
+                answers=submissions,
+            )
+            LOGGER.info("Batch job %s submitted; polling every %.0fs", job_name, self.config.poll_interval_seconds)
 
-        self._wait_for_job(client, job_name)
-        return client.download_results(job_name)
+            self._wait_for_job(client, job_name)
+            return client.download_results(job_name)
+        finally:
+            # The answers are dataset text, which should not outlive the job,
+            # whether it finished or was abandoned.
+            self._delete_inputs(client, run_prefix)
 
     @staticmethod
     def _submission_filename(index: int) -> str:
@@ -578,6 +599,20 @@ class AzureBatchDetector(TextDetector):
             client.cancel(job_name)
         except Exception as exc:
             LOGGER.warning("Could not cancel batch job %s, which may still be running: %s", job_name, exc)
+
+    @staticmethod
+    def _delete_inputs(client: BatchEndpointClient, run_prefix: str) -> None:
+        """Delete a job's uploaded inputs, best effort.
+
+        As with :meth:`_cancel_job`, a failure is logged, naming what was left
+        behind, rather than raised over the run's own result or error.
+        """
+        try:
+            client.delete_inputs(run_prefix)
+        except Exception as exc:
+            LOGGER.warning(
+                "Could not delete uploaded inputs under %s, which remain in blob storage: %s", run_prefix, exc
+            )
 
     def _to_output(self, records: dict[str, dict[str, Any]], n_answers: int) -> ModelOutput:
         """Map verdict records back onto dataset-order arrays.
