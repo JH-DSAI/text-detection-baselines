@@ -6,7 +6,7 @@ answers to blob storage, invokes the batch endpoint, polls until the job
 finishes, and downloads the per-submission verdicts. A call therefore takes
 minutes, not milliseconds, and needs Azure credentials.
 
-The wire contract is the one the application backend consumes (dsai_detection
+The wire contract is the one the HopDetect backend consumes (dsai_detection
 at ``1c87c29``, ``SubmissionResult`` schema 1.2):
 
 * Submissions are uploaded as individual files; the pipeline's ``doc_id`` is the
@@ -49,14 +49,15 @@ from .base import ModelOutput, ModelUnavailableError, TextDetector
 
 LOGGER = logging.getLogger(__name__)
 
-#: Decision strings emitted by the scoring step (``deploy/score.py``
-#: ``DECISION_MAPPING`` at ``1c87c29``).
+#: Decision strings emitted by the scoring step (dsai_detection
+#: ``deploy/score.py`` ``DECISION_MAPPING`` at ``1c87c29``).
 FLAG_DECISION = "Flag for review"
 NO_ACTION_DECISION = "No action"
 INCONCLUSIVE_DECISION = "Inconclusive"
 
 #: Azure ML job states mapped to the three outcomes this detector cares about.
-#: Mirrors ``backend/app/services/azure_batch.py`` ``_STATUS_MAP`` at ``9829695``.
+#: Mirrors text-detect-batch ``backend/app/services/azure_batch.py``
+#:``_STATUS_MAP`` at ``9829695``.
 #: Anything unrecognized is treated as still pending rather than as a failure.
 _TERMINAL_SUCCESS = frozenset({"Completed"})
 _TERMINAL_FAILURE = frozenset({"Failed", "Canceled", "CancelRequested"})
@@ -362,7 +363,7 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
         Verdict records keyed by submission id (input filename).
     """
     records: dict[str, dict[str, Any]] = {}
-    # Iterate over reports to find JSON verdicts, as app does
+    # Iterate over reports to find JSON verdicts, as the HopDetect backend does
     for md_file in sorted(output_dir.rglob("*.md")):
         json_file = md_file.with_suffix(".json")
         if json_file.exists():
