@@ -107,7 +107,7 @@ class AzureBatchConfig(BaseSettings):
     )
 
     storage_account_url: str
-    storage_container: str = "text-detect-uploads-staging"
+    storage_container: str
     datastore_name: str
     ml_subscription_id: str
     ml_resource_group: str

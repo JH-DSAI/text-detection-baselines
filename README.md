@@ -135,8 +135,9 @@ detector.
 Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
 or in `.env` (see [Configuration](#configuration)).
 Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
-`TDB_AZURE_BATCH_DATASTORE_NAME`, `TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`,
-`TDB_AZURE_BATCH_ML_RESOURCE_GROUP`, `TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+`TDB_AZURE_BATCH_STORAGE_CONTAINER`, `TDB_AZURE_BATCH_DATASTORE_NAME`,
+`TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`, `TDB_AZURE_BATCH_ML_RESOURCE_GROUP`,
+`TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
 See [.env.example](.env.example) for optional variables and defaults.
 
 The whole configuration is read and validated at once, on the first call that

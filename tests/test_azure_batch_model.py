@@ -31,6 +31,7 @@ from text_detection_baselines.models.azure_batch import (
 
 _ENV = {
     "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL": "https://example.blob.core.windows.net",
+    "TDB_AZURE_BATCH_STORAGE_CONTAINER": "container-1",
     "TDB_AZURE_BATCH_DATASTORE_NAME": "workspaceblobstore",
     "TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID": "sub-1",
     "TDB_AZURE_BATCH_ML_RESOURCE_GROUP": "rg-1",
@@ -106,6 +107,7 @@ def _config(**overrides):
     """A config built directly, so no environment is involved."""
     return AzureBatchConfig(
         storage_account_url="https://example.blob.core.windows.net",
+        storage_container="container-1",
         datastore_name="workspaceblobstore",
         ml_subscription_id="sub-1",
         ml_resource_group="rg-1",
@@ -156,9 +158,9 @@ def test_config_from_env_reads_the_prefixed_variables(monkeypatch):
     config = AzureBatchConfig.from_env()
 
     assert config.ml_subscription_id == "sub-1"
+    assert config.storage_container == "container-1"
     assert config.endpoint_name == "text-detection-batch-proc-test"
     assert config.deployment_name is None
-    assert config.storage_container == "text-detect-uploads-staging"
     assert config.assignment_default_word_count == 300
     assert config.max_batch_size is None
 
@@ -184,6 +186,7 @@ def test_config_from_env_reports_every_missing_variable_at_once(monkeypatch):
     message = str(excinfo.value)
     assert "TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID" in message
     assert "TDB_AZURE_BATCH_DATASTORE_NAME" in message
+    assert "TDB_AZURE_BATCH_STORAGE_CONTAINER" in message
     assert "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL" not in message
 
 
@@ -231,7 +234,7 @@ def test_config_from_env_reads_a_dotenv_file_shared_with_other_settings(dotenv):
     # their keys nor a blank placeholder may be reported as a problem here.
     dotenv(
         *(f"{name}={value}" for name, value in _ENV.items()),
-        "TDB_AZURE_BATCH_STORAGE_CONTAINER=",
+        "TDB_AZURE_BATCH_MAX_BATCH_SIZE=",
         "TDB_GEDE_PATH=/data/gede_essays.jsonl",
         "UNRELATED_TOOL_TOKEN=abc",
     )
@@ -239,7 +242,7 @@ def test_config_from_env_reads_a_dotenv_file_shared_with_other_settings(dotenv):
     config = AzureBatchConfig.from_env()
 
     assert config.ml_workspace_name == "ws-1"
-    assert config.storage_container == "text-detect-uploads-staging"
+    assert config.max_batch_size is None
 
 
 def test_config_from_env_reports_an_unrecognised_dotenv_variable(dotenv):
