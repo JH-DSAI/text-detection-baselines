@@ -156,7 +156,8 @@ def test_config_from_env_reads_the_prefixed_variables(monkeypatch):
     config = AzureBatchConfig.from_env()
 
     assert config.ml_subscription_id == "sub-1"
-    assert config.endpoint_name == "text-detection-batch-processing"
+    assert config.endpoint_name == "text-detection-batch-proc-test"
+    assert config.deployment_name is None
     assert config.storage_container == "text-detect-uploads-staging"
     assert config.assignment_default_word_count == 300
     assert config.max_batch_size is None
@@ -565,6 +566,9 @@ def test_submit_invokes_the_endpoint_with_every_required_input(monkeypatch):
     datastore = "azureml://datastores/workspaceblobstore/paths"
     assert invocation == {
         "endpoint_name": "custom-endpoint",
+        # Unset, so the SDK sends no deployment header and the endpoint routes
+        # to its default deployment.
+        "deployment_name": None,
         "inputs": {
             "student_assignments_dir": SimpleNamespace(type="uri_folder", path=f"{datastore}/run-1/submissions"),
             "assignment_json_file": SimpleNamespace(type="uri_file", path=f"{datastore}/run-1/assignment.json"),
@@ -572,6 +576,12 @@ def test_submit_invokes_the_endpoint_with_every_required_input(monkeypatch):
             "detection_pool": SimpleNamespace(type="uri_folder", path="azureml:detection_pool:2"),
         },
     }
+
+
+def test_submit_invokes_the_configured_deployment(monkeypatch):
+    _, _, invocation = _submit(monkeypatch, _config(deployment_name="pipeline-v2"))
+
+    assert invocation["deployment_name"] == "pipeline-v2"
 
 
 def _stub_azure_core_exceptions(monkeypatch):

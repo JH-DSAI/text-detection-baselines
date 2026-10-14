@@ -113,7 +113,8 @@ class AzureBatchConfig(BaseSettings):
     ml_resource_group: str
     ml_workspace_name: str
     endpoint_name: str = "text-detection-batch-proc-test"
-    deployment_name: str = "document-analysis-pipeline-v074"
+    # Unset invokes the endpoint's default deployment.
+    deployment_name: str | None = None
     # Required pinned Data Assets for the detection pipeline (AzureML disallows
     # defaults on data inputs, so these are attached explicitly on every invoke).
     pipeline_config_asset: str = "azureml:pipeline_config_yaml:9"
