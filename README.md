@@ -91,6 +91,35 @@ any answer that has no question is rejected before anything runs.
 
 ### The `azure-batch` model
 
+The `azure-batch` model calls a HopDetect pipeline hosted on Azure ML.
+
+It is configured via `TDB_AZURE_BATCH_*` variables, set in
+the environment or in `.env` (see [Configuration](#configuration)).
+Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
+`TDB_AZURE_BATCH_STORAGE_CONTAINER`, `TDB_AZURE_BATCH_DATASTORE_NAME`,
+`TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`, `TDB_AZURE_BATCH_ML_RESOURCE_GROUP`,
+`TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+See [.env.example](.env.example) for optional variables and defaults.
+
+Authentication is specified separately.  To run the evaluation harness locally,
+do `az login` and the harness will use those credentials.
+For a headless run, export a service principal as
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`. Those must be
+set in the environment, not in `.env`, which is read only for `TDB_*` settings.
+
+Each question is its own batch job, and jobs run one after another, so start with
+a single question. These commands copy the 12 answers to one question out of the
+bundled `demo` data and evaluate them in one job:
+
+```bash
+grep '"question": "A committee must decide the future of seasonal water rationing' \
+  text_detection_baselines/datasets/data/demo.jsonl > datasets/demo-one-question.jsonl
+pixi run -e azure main --register-file-dataset one-question=datasets/demo-one-question.jsonl \
+  --exclude-dataset demo --model azure-batch
+```
+
+#### `azure-batch` model details
+
 One `predict` call is one batch job: the answers are uploaded to blob storage, the
 endpoint is invoked, the job is polled to completion, and the per-submission verdicts
 are downloaded. Expect **minutes per invocation**, and a real cost per run.
@@ -103,54 +132,20 @@ over. A process killed before it can clean up leaves them under
 `TDB_AZURE_BATCH_BLOB_PREFIX`, so a lifecycle rule on the container that deletes
 blobs under that prefix after a few days is a sensible backstop.
 
-Verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is a
-window-max cosine judged against `tau`, a *per-document* length-matched conformal
-threshold, so raw scores are not comparable across submissions; the reported score is
-the margin `score - tau`, which is unbounded rather than in `[0, 1]`.
-
-| harness output | endpoint field |
-| --- | --- |
-| `predictions` | `is_flagged` (decision `Flag for review`) |
-| `ood_flags` | decision `Inconclusive` — a submission the detector declined to assess |
-| `scores` | `score - tau` |
-
-Each question is its own batch job, and jobs run one after another, so start with
-a single question. These commands copy the 12 answers to one question out of the
-bundled `demo` data and evaluate them in one job, using the `azure` environment,
-which has the Azure SDKs:
-
-```bash
-grep '"question": "A committee must decide the future of seasonal water rationing' \
-  text_detection_baselines/datasets/data/demo.jsonl > datasets/demo-one-question.jsonl
-pixi run -e azure main --register-file-dataset one-question=datasets/demo-one-question.jsonl \
-  --exclude-dataset demo --model azure-batch
-```
-
-Keep `--exclude-dataset demo`: `--model` and `--register-file-dataset` add to the
-default selection rather than replacing it, and `azure-batch` on the whole `demo`
-dataset is 32 jobs, one per question. The default stub models run as well, at no
-real cost. The `demo` text is synthetic, so this run checks the wiring, not the
-detector.
-
-Configuration comes from `TDB_AZURE_BATCH_*` variables, set in the environment
-or in `.env` (see [Configuration](#configuration)).
-Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
-`TDB_AZURE_BATCH_STORAGE_CONTAINER`, `TDB_AZURE_BATCH_DATASTORE_NAME`,
-`TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`, `TDB_AZURE_BATCH_ML_RESOURCE_GROUP`,
-`TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
-See [.env.example](.env.example) for optional variables and defaults.
-
 The whole configuration is read and validated at once, on the first call that
-needs it, so a misconfiguration is reported as a single list of problems rather
-than as an Azure SDK error several minutes in. That includes a
+needs it. That includes a
 `TDB_AZURE_BATCH_*` key in `.env` that matches no setting, which is usually a
 typo. A misspelled variable exported in the shell cannot be detected this way
 and is ignored.
 
-Authentication goes through `azure-identity`'s `DefaultAzureCredential`: locally,
-`az login` is enough; for a headless run, export a service principal as
-`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`. Those must be
-set in the environment, not in `.env`, which is read only for `TDB_*` settings.
+HopDetect verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is judged against `tau`, a *per-document* threshold, so raw scores are not comparable across submissions.  The reported score is
+the margin `score - tau`, which is unbounded rather than in `[0, 1]`.
+
+| harness output | HopDetect endpoint field |
+| --- | --- |
+| `predictions` | `is_flagged` (decision `Flag for review`) |
+| `ood_flags` | decision `Inconclusive` — a submission the detector declined to assess |
+| `scores` | `score - tau` |
 
 ## Metrics
 
