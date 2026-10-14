@@ -112,10 +112,11 @@ class AzureBatchConfig(BaseSettings):
     ml_subscription_id: str
     ml_resource_group: str
     ml_workspace_name: str
-    endpoint_name: str = "text-detection-batch-processing"
+    endpoint_name: str = "text-detection-batch-proc-test"
+    deployment_name: str = "document-analysis-pipeline-v074"
     # Required pinned Data Assets for the detection pipeline (AzureML disallows
     # defaults on data inputs, so these are attached explicitly on every invoke).
-    pipeline_config_asset: str = "azureml:pipeline_config_yaml:8"
+    pipeline_config_asset: str = "azureml:pipeline_config_yaml:9"
     detection_pool_asset: str = "azureml:detection_pool:5"
     # Fallback word count for the assignment JSON.
     assignment_default_word_count: PositiveInt = 300
@@ -286,6 +287,7 @@ class AzureMLBatchClient:
 
         job = self._ml().batch_endpoints.invoke(
             endpoint_name=self.config.endpoint_name,
+            deployment_name=self.config.deployment_name,
             inputs={
                 "student_assignments_dir": Input(type="uri_folder", path=self._input_uri(submissions_prefix)),
                 "assignment_json_file": Input(type="uri_file", path=self._input_uri(assignment_path)),
