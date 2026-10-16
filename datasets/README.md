@@ -96,8 +96,8 @@ repository for the current citations; it also carries the paper appendix.
 
 With no `--out`, this writes `datasets/gede_essays.jsonl` in a source checkout, or
 `${XDG_CACHE_HOME:-~/.cache}/text-detection-baselines/gede_essays.jsonl` otherwise.
-Set `TDB_GEDE_PATH` to override both the write location and where the `gede` dataset
-is looked up. The prepared file and its sidecar are git-ignored.
+Set `TDB_GEDE_PATH`, in the environment or in `.env`, to override both the write
+location and where the `gede` dataset is looked up. The prepared file and its sidecar are git-ignored.
 
 Then:
 

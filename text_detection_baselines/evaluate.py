@@ -31,10 +31,11 @@ from typing import Any
 
 import numpy as np
 
+from .datasets import DEFAULT_QUESTION_KEY
 from .datasets import load_dataset as load_dataset_batch
 from .datasets.file import normalize_label as normalize_label_value
 from .metrics import run_all_metrics
-from .models.base import StubModelOutput, StubTextDetector
+from .models.base import ModelOutput, TextDetector
 
 LOGGER = logging.getLogger(__name__)
 
@@ -46,9 +47,16 @@ class DatasetRecord:
     text: str
     label: int
     category: str
+    question: str = ""
 
 
-def load_dataset(path: Path, text_key: str, label_key: str, category_key: str) -> list[DatasetRecord]:
+def load_dataset(
+    path: Path,
+    text_key: str,
+    label_key: str,
+    category_key: str,
+    question_key: str = DEFAULT_QUESTION_KEY,
+) -> list[DatasetRecord]:
     """Compatibility wrapper returning record objects from file-based datasets."""
     # We are loading a local dataset from JSON and we assume the user trusts it
     batch = load_dataset_batch(  # nosec: B615[huggingface_unsafe_download]
@@ -57,10 +65,11 @@ def load_dataset(path: Path, text_key: str, label_key: str, category_key: str) -
         text_key=text_key,
         label_key=label_key,
         category_key=category_key,
+        question_key=question_key,
     )
     return [
-        DatasetRecord(text=text, label=int(label), category=str(category))
-        for text, label, category in zip(batch.texts, batch.labels, batch.categories)
+        DatasetRecord(text=text, label=int(label), category=str(category), question=str(question))
+        for text, label, category, question in zip(batch.texts, batch.labels, batch.categories, batch.questions)
     ]
 
 
@@ -90,10 +99,69 @@ def _base_counts(labels: np.ndarray, tau: float, target_alpha: float) -> dict[st
 # ---------------------------------------------------------------------------
 
 
+def predict_by_question(
+    model: TextDetector,
+    questions: np.ndarray,
+    answers: list[str],
+) -> ModelOutput:
+    """Invoke *model* once per question and reassemble dataset-order outputs.
+
+    Detectors are invoked per question (see :meth:`TextDetector.predict`),
+    but metrics are computed over the dataset as a whole, so the per-question
+    outputs are scattered back into the original row order. Rows are grouped by
+    question text -- the value the detector actually receives -- in order of
+    first appearance, which keeps a single-question dataset to a single call.
+
+    Args:
+        model:     The detector to invoke.
+        questions: Question per row, parallel to *answers*.
+        answers:   The answers to score, in dataset order.
+
+    Returns:
+        One :class:`ModelOutput` covering every row, in dataset order.
+
+    Raises:
+        ValueError: If a call returns a different number of results than the
+            answers it was given. Remote detectors can drop or duplicate
+            records, and a silent misalignment would attribute one answer's
+            verdict to another.
+    """
+    groups: dict[str, list[int]] = {}
+    for index, question in enumerate(questions.tolist()):
+        groups.setdefault(str(question), []).append(index)
+
+    n = len(answers)
+    scores = np.empty(n, dtype=float)
+    predictions = np.empty(n, dtype=int)
+    ood_flags = np.empty(n, dtype=bool)
+
+    for question, indices in groups.items():
+        LOGGER.info("Invoking model=%s on %d answer(s) for one question", model.model_name, len(indices))
+        output = model.predict(question, [answers[i] for i in indices])
+
+        for name, array in (
+            ("scores", output.scores),
+            ("predictions", output.predictions),
+            ("ood_flags", output.ood_flags),
+        ):
+            if len(array) != len(indices):
+                raise ValueError(
+                    f"Model '{model.model_name}' returned {len(array)} {name} for {len(indices)} answers "
+                    f"(question: {question[:60]!r})",
+                )
+
+        rows = np.array(indices, dtype=int)
+        scores[rows] = output.scores
+        predictions[rows] = output.predictions
+        ood_flags[rows] = output.ood_flags
+
+    return ModelOutput(scores=scores, predictions=predictions, ood_flags=ood_flags)
+
+
 def evaluate_predictions(
     labels: np.ndarray,
     categories: np.ndarray,
-    output: StubModelOutput,
+    output: ModelOutput,
     target_alpha: float,
     normalized_scores: bool,
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
@@ -102,7 +170,7 @@ def evaluate_predictions(
     Args:
         labels:           Binary array (0=human, 1=machine).
         categories:       String array of contribution_level per sample.
-        output:           Raw model output from :meth:`StubTextDetector.predict`.
+        output:           Raw model output from :meth:`TextDetector.predict`.
         target_alpha:     Target FPR used to learn the threshold ``tau``.
         normalized_scores: Whether scores are in ``[0, 1]``.
 
@@ -162,21 +230,26 @@ def evaluate_predictions(
 
 def evaluate_model_on_dataset(
     dataset_path: Path,
-    model: StubTextDetector,
+    model: TextDetector,
     target_alpha: float,
     text_key: str,
     label_key: str,
     category_key: str,
+    question_key: str = DEFAULT_QUESTION_KEY,
 ) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     """Run one model against one dataset and return metric dicts.
 
+    The model is invoked once per question (:func:`predict_by_question`); the
+    metrics below are computed over the whole dataset regardless of how it split.
+
     Args:
         dataset_path:  Path to the JSONL (or JSON array) dataset file.
-        model:         Instantiated stub detector.
+        model:         Instantiated detector.
         target_alpha:  Target FPR for threshold learning.
         text_key:      Field name for the text to score.
         label_key:     Field name for the ground-truth label.
         category_key:  Field name for the per-category grouping variable.
+        question_key:  Field name for the question.
 
     Returns:
         ``(overall_metrics, {category: category_metrics})``.  Neither dict
@@ -190,13 +263,14 @@ def evaluate_model_on_dataset(
         text_key=text_key,
         label_key=label_key,
         category_key=category_key,
+        question_key=question_key,
     )
 
     texts = batch.texts
     labels = batch.labels
     categories = batch.categories
 
-    model_output = model.predict(texts)
+    model_output = predict_by_question(model, batch.questions, texts)
 
     overall, per_category = evaluate_predictions(
         labels=labels,

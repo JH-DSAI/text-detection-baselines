@@ -10,6 +10,7 @@ import pytest
 from text_detection_baselines import cli as cli_module
 from text_detection_baselines.cli import (
     NAME_PATH,
+    _configure_logging,
     _flatten_overall,
     _flatten_per_category,
     _raise_for_unavailable_dataset,
@@ -672,6 +673,40 @@ def test_text_key_applies_to_a_runtime_registered_dataset(runner, tmp_path, rena
         assert model_metrics["n_samples"] == 20
 
 
+def test_question_key_applies_to_a_runtime_registered_dataset(runner, tmp_path, clean_registry):
+    """``--question-key`` must reach the loader, which is what batches the models."""
+    dataset = tmp_path / "prompted.jsonl"
+    rows = [
+        {"answer": "a human answer that runs on for a while", "label": "real", "prompt": "Q1"},
+        {"answer": "another human answer, also reasonably long", "label": "real", "prompt": "Q2"},
+        {"answer": "in conclusion, a balanced approach is essential", "label": "fake", "prompt": "Q1"},
+        {"answer": "furthermore it is important to consider stakeholders", "label": "fake", "prompt": "Q2"},
+    ]
+    dataset.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"mine={dataset}",
+            "--exclude-dataset",
+            "demo",
+            "--model",
+            "length",
+            "--question-key",
+            "prompt",
+            "--export",
+            "json",
+            "--output-dir",
+            str(tmp_path / "out"),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    metrics = json.loads((tmp_path / "out" / "metrics.json").read_text(encoding="utf-8"))
+    assert metrics["overall"]["mine"]["length"]["n_samples"] == 4
+
+
 def test_text_key_leaves_built_in_dataset_schemas_alone(runner, tmp_path, renamed_key_dataset, clean_registry):
     """The flag describes runtime files only; ``demo`` keeps its own ``answer`` field."""
     result = runner.invoke(
@@ -783,3 +818,128 @@ def test_cli_can_run_twice_in_one_process(runner, tmp_path, tiny_dataset, clean_
         assert (tmp_path / run / "metrics.json").is_file()
 
     assert root.handlers == [], f"the command body configured the root logger: {root.handlers}"
+
+
+def test_logging_setup_keeps_the_azure_sdks_to_warnings():
+    # The SDKs' HTTP logging policy logs each request at INFO, with its headers.
+    http_logger = logging.getLogger("azure.core.pipeline.policies.http_logging_policy")
+    azure_logger = logging.getLogger("azure")
+    level = azure_logger.level
+    try:
+        _configure_logging()
+
+        assert not http_logger.isEnabledFor(logging.INFO)
+        assert http_logger.isEnabledFor(logging.WARNING)
+    finally:
+        azure_logger.setLevel(level)
+
+
+def test_cli_reports_an_unloadable_dataset_before_running_any_model(
+    runner, tmp_path, tiny_dataset, clean_registry, caplog
+):
+    caplog.set_level(logging.INFO)
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text('{"answer": "a", "label": "real"}\n{"answer": "b",\n', encoding="utf-8")
+
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"tiny={tiny_dataset}",
+            "--register-file-dataset",
+            f"bad={bad}",
+            "--exclude-dataset",
+            "demo",
+            *_ONE_MODEL,
+        ],
+    )
+
+    # A ClickException, which click reports as exit 1 with the message on stderr.
+    assert result.exit_code == 1
+    assert "Dataset 'bad' could not be loaded" in result.stderr
+    assert "Invalid JSON on line 2" in result.stderr
+    # Not even on 'tiny', which comes first and is fine.
+    assert not any("Evaluating" in record.getMessage() for record in caplog.records)
+
+
+def test_cli_reports_a_dataset_with_one_label(runner, tmp_path, clean_registry):
+    rows = [row for row in _TINY_ROWS if row["label"] == "real"]
+    path = tmp_path / "human-only.jsonl"
+    path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
+
+    result = runner.invoke(
+        main, ["--register-file-dataset", f"human-only={path}", "--exclude-dataset", "demo", *_ONE_MODEL]
+    )
+
+    assert result.exit_code == 1
+    assert "has only human labels" in result.stderr
+
+
+# Safe to run in process despite AGENTS.md's caution about azure-batch: both
+# failures happen before any Azure client is built, and conftest hides the
+# developer's own TDB_* settings, so nothing reaches the network.
+_AZURE_ONLY = [
+    "--model",
+    "azure-batch",
+    "--exclude-model",
+    "dummy-norm",
+    "--exclude-model",
+    "dummy-raw",
+    "--exclude-model",
+    "length",
+]
+
+
+@pytest.fixture
+def tiny_dataset_with_question(tmp_path):
+    """:data:`_TINY_ROWS` with a question, which azure-batch requires."""
+    path = tmp_path / "tiny-with-question.jsonl"
+    path.write_text(
+        "".join(json.dumps(dict(row, question="Should homework be banned?")) + "\n" for row in _TINY_ROWS),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_cli_reports_missing_azure_sdks_with_how_to_install_them(
+    runner, tiny_dataset_with_question, clean_registry, monkeypatch
+):
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: None)
+
+    result = runner.invoke(
+        main,
+        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_AZURE_ONLY],
+    )
+
+    assert result.exit_code == 1
+    assert "Model 'azure-batch' cannot run" in result.stderr
+    assert "pixi run -e azure" in result.stderr
+
+
+def test_cli_reports_missing_azure_configuration(runner, tiny_dataset_with_question, clean_registry, monkeypatch):
+    # The SDKs are reported present, so the next check, the configuration, fails.
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: object())
+
+    result = runner.invoke(
+        main,
+        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_AZURE_ONLY],
+    )
+
+    assert result.exit_code == 1
+    assert "Model 'azure-batch' cannot run" in result.stderr
+    assert "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL" in result.stderr
+
+
+def test_cli_rejects_answers_without_a_question_before_running_any_model(runner, tiny_dataset, clean_registry, caplog):
+    caplog.set_level(logging.INFO)
+
+    # The stub models stay selected: they accept answers without a question,
+    # but must not run ahead of the failure either.
+    result = runner.invoke(
+        main,
+        ["--register-file-dataset", f"tiny={tiny_dataset}", "--exclude-dataset", "demo", "--model", "azure-batch"],
+    )
+
+    assert result.exit_code == 1
+    assert "needs a question for every answer, but 4 of 4 answers in dataset 'tiny'" in result.stderr
+    assert not any("Evaluating" in record.getMessage() for record in caplog.records)

@@ -32,6 +32,13 @@ docs = [
     "sphinx-automodapi",
     "nbsphinx"
 ]
+# Only the azure-batch model needs these, and only at predict time: the SDKs are
+# imported lazily so every other model runs without them installed.
+azure = [
+    "azure-ai-ml>=1.20",
+    "azure-identity>=1.17",
+    "azure-storage-blob>=12.20"
+]
 
 [project.urls]
 homepage = "https://github.com/JH-DSAI/text-detection-baselines.git"
@@ -110,6 +117,16 @@ timeout = 15
 
 [tool.mypy]
 files = ["text_detection_baselines/**/*.py"]
+# Without the plugin, mypy reads a settings class as an ordinary model and
+# demands every field at the call site, where the point of `AzureBatchConfig()`
+# is that the environment supplies them.
+plugins = ["pydantic.mypy"]
+
+# The azure extra is not installed in the dev environment: the SDKs are large,
+# and the azure-batch model imports them lazily precisely so they stay optional.
+[[tool.mypy.overrides]]
+module = ["azure.*"]
+ignore_missing_imports = true
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
@@ -132,6 +149,10 @@ transformers = "~=4.44"
 click = ">=8.3.2,<9"
 pyyaml = ">=6.0.3,<7"
 rich = ">=15.0.0,<16"
+# The package-wide settings (`settings.py`) and the azure-batch model's config
+# are both built on this; 2.14 adds the `dotenv_filtering` that lets them share
+# one `.env` file.
+pydantic-settings = ">=2.14,<3"
 
 [tool.pixi.pypi-dependencies]
 text-detection-baselines = { path = ".", editable = true }
@@ -145,6 +166,11 @@ pytest-timeout = ">=2.4"
 ruff = ">=0.15"
 mypy = ">=1.20"
 types-pyyaml = ">=6.0.12.20260408, <7"
+
+[tool.pixi.feature.azure.pypi-dependencies]
+azure-ai-ml = ">=1.20"
+azure-identity = ">=1.17"
+azure-storage-blob = ">=12.20"
 
 [tool.pixi.feature.docs.pypi-dependencies]
 sphinx = ">=9.0"
@@ -182,6 +208,9 @@ test-py312 = { features = ["dev", "py312"], solve-group = "test-py312" }
 test-py313 = { features = ["dev", "py313"], solve-group = "test-py313" }
 test-py314 = { features = ["dev", "py314"], solve-group = "test-py314" }
 cuda = { features = ["cuda"] }
+# `pixi run -e azure main --model azure-batch` is the way to actually reach the
+# endpoint; the default environment deliberately cannot.
+azure = { features = ["azure"] }
 
 [tool.pixi.environments.dist]
 features = ["dev"]
