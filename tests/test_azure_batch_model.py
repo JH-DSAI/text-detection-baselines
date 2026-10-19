@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import sys
+from enum import Enum
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock
@@ -629,6 +630,25 @@ def test_job_status_marks_only_retryable_sdk_errors_as_transient(monkeypatch, er
 
     with pytest.raises(TransientEndpointError if transient else error_cls):
         client.job_status("job-1")
+
+
+def test_job_status_returns_the_sdk_enum_value(monkeypatch):
+    _stub_azure_core_exceptions(monkeypatch)
+
+    # Mirrors the SDK's ``JobStatus``, whose ``str()`` is ``"JobStatus.COMPLETED"``.
+    class JobStatus(str, Enum):
+        COMPLETED = "Completed"
+
+    ml_client = MagicMock()
+    ml_client.jobs.get.return_value = SimpleNamespace(status=JobStatus.COMPLETED)
+    client = AzureMLBatchClient(_config())
+    monkeypatch.setattr(client, "_ml", lambda: ml_client)
+
+    status = client.job_status("job-1")
+
+    # The enum member itself would pass an ``==`` check, so check the type too.
+    assert status == "Completed"
+    assert type(status) is str
 
 
 def test_cancel_requests_cancellation_of_the_named_job(monkeypatch):

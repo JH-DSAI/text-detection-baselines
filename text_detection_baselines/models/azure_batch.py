@@ -35,6 +35,7 @@ import json
 import logging
 import time
 import uuid
+from enum import Enum
 from importlib.util import find_spec
 from pathlib import Path
 from typing import Any, Protocol
@@ -306,13 +307,17 @@ class AzureMLBatchClient:
         # are the failures left once it gives up, which a job polled for up to
         # an hour should outlast rather than be abandoned over.
         try:
-            return str(self._ml().jobs.get(job_name).status)
+            status = self._ml().jobs.get(job_name).status
         except (ServiceRequestError, ServiceResponseError) as exc:
             raise TransientEndpointError(str(exc)) from exc
         except HttpResponseError as exc:
             if exc.status_code in _RETRYABLE_HTTP_STATUSES:
                 raise TransientEndpointError(str(exc)) from exc
             raise
+
+        # The SDK reports a ``(str, Enum)`` member, which compares equal to
+        # ``"Completed"`` but whose ``str()`` is ``"JobStatus.COMPLETED"``.
+        return status.value if isinstance(status, Enum) else str(status)
 
     def cancel(self, job_name: str) -> None:
         """Request cancellation. The returned poller is not waited on."""
