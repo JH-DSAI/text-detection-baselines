@@ -333,6 +333,13 @@ class AzureMLBatchClient:
                 output_name=ANALYSIS_REPORTS_OUTPUT,
             )
 
+            # The SDK skips an output it cannot resolve with only a debug log,
+            # which would otherwise surface as every verdict going missing.
+            if not any(path.is_file() for path in Path(tmpdir).rglob("*")):
+                raise RuntimeError(
+                    f"Nothing was downloaded for the {ANALYSIS_REPORTS_OUTPUT!r} output of batch job {job_name}",
+                )
+
             # The SDK writes a named output under ``named-outputs/``, except for
             # a batch job that is not a pipeline job, whose scoring output it
             # writes straight into the download folder.

@@ -782,3 +782,9 @@ def test_download_results_falls_back_to_the_download_folder(monkeypatch):
     records, _ = _download(monkeypatch, lambda root: _write_report(root, "000000.txt"))
 
     assert list(records) == ["000000.txt"]
+
+
+def test_download_results_raises_when_nothing_was_downloaded(monkeypatch):
+    # As the SDK does for an output it cannot resolve: no error, no files.
+    with pytest.raises(RuntimeError, match="Nothing was downloaded .* job-1"):
+        _download(monkeypatch, lambda root: None)
