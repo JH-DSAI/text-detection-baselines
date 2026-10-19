@@ -122,7 +122,7 @@ One `predict` call is one batch job: the answers are uploaded to blob storage, t
 endpoint is invoked, the job is polled to completion, and the per-submission verdicts
 are downloaded. Expect **minutes per invocation**, and a real cost per run.
 Dropped connections while polling are retried until the job's timeout
-(`TDB_AZURE_BATCH_TIMEOUT_SECONDS`, an hour by default). A job that
+(`TDB_AZURE_BATCH_TIMEOUT_SECONDS`, a few hours by default). A job that
 times out, is interrupted with Ctrl-C, or can no longer be polled is cancelled rather
 than left running; its name is logged in case the cancellation itself fails.
 Either way, the answers uploaded for a job are deleted from blob storage once it is

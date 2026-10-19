@@ -128,7 +128,7 @@ class AzureBatchConfig(BaseSettings):
     # How often a submitted job is polled, and how long to wait for it before
     # cancelling it.
     poll_interval_seconds: PositiveFloat = 30.0
-    timeout_seconds: PositiveFloat = 3600.0
+    timeout_seconds: PositiveFloat = 10800.0
     # Split a question's answers across jobs of at most this many. Unset sends
     # them all in one job, which is the regime the endpoint's batch-level
     # calibration assumes.
@@ -304,8 +304,7 @@ class AzureMLBatchClient:
         from azure.core.exceptions import HttpResponseError, ServiceRequestError, ServiceResponseError
 
         # The SDK retries each request itself, but only for a few seconds. These
-        # are the failures left once it gives up, which a job polled for up to
-        # an hour should outlast rather than be abandoned over.
+        # are the failures left once it gives up.
         try:
             status = self._ml().jobs.get(job_name).status
         except (ServiceRequestError, ServiceResponseError) as exc:
