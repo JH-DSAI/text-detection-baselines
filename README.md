@@ -32,13 +32,14 @@ it to `.env` and fill in what you need. A variable left blank counts as unset.
 
 ## Datasets
 
-Two datasets
+Three datasets
 are registered; see [datasets/README.md](datasets/README.md) for provenance,
 licences, and citations.
 
 | name | default | what it is |
 | --- | --- | --- |
 | `demo` | yes | 200 records of **synthetic** text bundled inside the package. Both classes are separated by deliberately planted surface statistics, so its numbers describe the pipeline, not detection quality. |
+| `demo-one-question` | no | The 12 `demo` records that answer `demo`'s most common question, for a single-job `azure-batch` run. |
 | `gede` | no | The GEDE corpus of student essays and LLM rewrites. **Licensed CC BY-NC-SA 4.0 and not bundled** — you obtain it from [upstream](https://github.com/lukasgehring/Assessing-LLM-Text-Detection-in-Educational-Contexts) and convert it locally. |
 
 To use `gede`,
@@ -108,14 +109,11 @@ For a headless run, export a service principal as
 set in the environment, not in `.env`, which is read only for `TDB_*` settings.
 
 Each question is its own batch job, and jobs run one after another, so start with
-a single question. These commands copy the 12 answers to one question out of the
-bundled `demo` data and evaluate them in one job:
+a single question. The bundled `demo-one-question` dataset holds the 12 `demo`
+answers to one question, so this command evaluates them in one job:
 
 ```bash
-grep '"question": "A committee must decide the future of seasonal water rationing' \
-  text_detection_baselines/datasets/data/demo.jsonl > datasets/demo-one-question.jsonl
-pixi run -e azure main --register-file-dataset one-question=datasets/demo-one-question.jsonl \
-  --exclude-dataset demo --model azure-batch
+pixi run -e azure main --dataset demo-one-question --exclude-dataset demo --model azure-batch
 ```
 
 #### `azure-batch` model details

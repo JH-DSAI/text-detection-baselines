@@ -21,18 +21,25 @@ Run from the repository root::
 
     python tools/make_demo_dataset.py
 
-Output (overwritten in place): ``text_detection_baselines/datasets/data/demo.jsonl``
+Outputs (overwritten in place), both in ``text_detection_baselines/datasets/data/``:
+
+* ``demo.jsonl`` -- the full ``demo`` dataset.
+* ``demo-one-question.jsonl`` -- the ``demo`` records answering its most common
+  question, unchanged, for detectors that are invoked once per question at real cost.
 """
 
 from __future__ import annotations
 
+import collections
 import json
 import random
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEMO_PATH = REPO_ROOT / "text_detection_baselines" / "datasets" / "data" / "demo.jsonl"
+DATA_DIR = REPO_ROOT / "text_detection_baselines" / "datasets" / "data"
+DEMO_PATH = DATA_DIR / "demo.jsonl"
+ONE_QUESTION_PATH = DATA_DIR / "demo-one-question.jsonl"
 
 SEED = 20260811
 DATASET_NAME = "demo-synthetic"
@@ -270,6 +277,20 @@ def build_demo() -> list[dict[str, Any]]:
     return rows
 
 
+def build_one_question(demo: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Select the ``demo`` records that answer its most common question.
+
+    The pipeline invokes a detector once per question, and for ``azure-batch`` each
+    invocation is a remote batch job taking minutes and costing money, so a
+    single-question subset is the cheapest real end-to-end run.  Records are kept
+    as they are, ``id`` included, so each one traces back to its ``demo`` row.
+    ``Counter.most_common`` breaks ties by first appearance, so the choice is
+    deterministic.
+    """
+    question, _ = collections.Counter(row["question"] for row in demo).most_common(1)[0]
+    return [row for row in demo if row["question"] == question]
+
+
 _FIELD_ORDER = [
     "id",
     "dataset",
@@ -313,11 +334,13 @@ def check_token_budget(rows: list[dict[str, Any]], label: str) -> None:
 
 
 def main() -> None:
-    """Regenerate the ``demo`` dataset."""
+    """Regenerate the ``demo`` and ``demo-one-question`` datasets."""
     demo = build_demo()
     check_token_budget(demo, "demo")
-    write_jsonl(DEMO_PATH, demo)
-    print(f"wrote {len(demo)} records to {DEMO_PATH.relative_to(REPO_ROOT)}")
+    one_question = build_one_question(demo)
+    for path, rows in [(DEMO_PATH, demo), (ONE_QUESTION_PATH, one_question)]:
+        write_jsonl(path, rows)
+        print(f"wrote {len(rows)} records to {path.relative_to(REPO_ROOT)}")
 
 
 if __name__ == "__main__":

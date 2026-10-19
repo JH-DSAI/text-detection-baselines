@@ -160,6 +160,16 @@ def demo_dataset_path() -> Path:
     return _PACKAGE_DATA_DIR / "demo.jsonl"
 
 
+def demo_one_question_dataset_path() -> Path:
+    """Return the path of the bundled ``demo-one-question`` dataset.
+
+    It is the subset of ``demo`` answering a single question, so a detector that
+    is invoked once per question -- at real cost, for ``azure-batch`` -- is
+    invoked exactly once.
+    """
+    return _PACKAGE_DATA_DIR / "demo-one-question.jsonl"
+
+
 def gede_cache_dir() -> Path:
     """Return the user cache directory prepared datasets default to."""
     xdg_cache = os.environ.get("XDG_CACHE_HOME")
@@ -217,6 +227,7 @@ def default_gede_output_path() -> Path:
 
 
 register_file_dataset(name="demo", path=demo_dataset_path())
+register_file_dataset(name="demo-one-question", path=demo_one_question_dataset_path())
 register_file_dataset(name="gede", path=resolve_gede_path())
 
 
@@ -236,6 +247,7 @@ __all__ = [
     "dataset_available",
     "default_gede_output_path",
     "demo_dataset_path",
+    "demo_one_question_dataset_path",
     "gede_cache_dir",
     "get_dataset_spec",
     "get_default_dataset_names",
