@@ -34,8 +34,10 @@ docs = [
 ]
 # Only the azure-batch model needs these, and only at predict time: the SDKs are
 # imported lazily so every other model runs without them installed.
+# azure-ai-ml 1.35 (through at least 1.35.2) cannot resolve a job's data outputs,
+# so `jobs.download(output_name=...)` silently downloads nothing.
 azure = [
-    "azure-ai-ml>=1.20",
+    "azure-ai-ml>=1.20,<1.35",
     "azure-identity>=1.17",
     "azure-storage-blob>=12.20"
 ]
@@ -168,7 +170,8 @@ mypy = ">=1.20"
 types-pyyaml = ">=6.0.12.20260408, <7"
 
 [tool.pixi.feature.azure.pypi-dependencies]
-azure-ai-ml = ">=1.20"
+# Capped as in the `azure` extra above.
+azure-ai-ml = ">=1.20,<1.35"
 azure-identity = ">=1.17"
 azure-storage-blob = ">=12.20"
 
