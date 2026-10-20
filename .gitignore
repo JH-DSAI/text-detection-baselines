@@ -9,6 +9,10 @@ metrics.yaml
 overall-metrics.csv
 per-category-metrics.csv
 
+# Azure batch model output files
+*.txt.json
+*.txt.md
+
 # Editor swap files
 .*.swp
 .*.swo
