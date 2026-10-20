@@ -133,6 +133,10 @@ class AzureBatchConfig(BaseSettings):
     # them all in one job, which is the regime the endpoint's batch-level
     # calibration assumes.
     max_batch_size: PositiveInt | None = None
+    # Keep each job's downloaded ``analysis_reports`` output, for debugging, in
+    # a folder named for the job under this one. Unset, it is downloaded to a
+    # temporary folder and discarded once parsed.
+    reports_dir: Path | None = None
 
     @classmethod
     def from_env(cls) -> AzureBatchConfig:
@@ -323,31 +327,46 @@ class AzureMLBatchClient:
         self._ml().jobs.begin_cancel(job_name)
 
     def download_results(self, job_name: str) -> dict[str, dict[str, Any]]:
-        """Download ``analysis_reports`` and parse the per-submission verdicts."""
+        """Download ``analysis_reports`` and parse the per-submission verdicts.
+
+        The download is kept under :attr:`AzureBatchConfig.reports_dir` when
+        that is set, and otherwise made to a temporary folder.
+        """
         import tempfile
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self._ml().jobs.download(
-                name=job_name,
-                download_path=tmpdir,
-                output_name=ANALYSIS_REPORTS_OUTPUT,
+        if self.config.reports_dir is None:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                return self._download_and_parse(job_name, Path(tmpdir))
+
+        download_dir = self.config.reports_dir / job_name
+        # Logged before the download, so the folder can be found even if
+        # parsing what landed in it fails.
+        LOGGER.info("Saving the reports of batch job %s to %s", job_name, download_dir)
+        download_dir.mkdir(parents=True, exist_ok=True)
+        return self._download_and_parse(job_name, download_dir)
+
+    def _download_and_parse(self, job_name: str, download_dir: Path) -> dict[str, dict[str, Any]]:
+        self._ml().jobs.download(
+            name=job_name,
+            download_path=download_dir,
+            output_name=ANALYSIS_REPORTS_OUTPUT,
+        )
+
+        # The SDK skips an output it cannot resolve with only a debug log,
+        # which would otherwise surface as every verdict going missing.
+        if not any(path.is_file() for path in download_dir.rglob("*")):
+            raise RuntimeError(
+                f"Nothing was downloaded for the {ANALYSIS_REPORTS_OUTPUT!r} output of batch job {job_name}",
             )
 
-            # The SDK skips an output it cannot resolve with only a debug log,
-            # which would otherwise surface as every verdict going missing.
-            if not any(path.is_file() for path in Path(tmpdir).rglob("*")):
-                raise RuntimeError(
-                    f"Nothing was downloaded for the {ANALYSIS_REPORTS_OUTPUT!r} output of batch job {job_name}",
-                )
+        # The SDK writes a named output under ``named-outputs/``, except for
+        # a batch job that is not a pipeline job, whose scoring output it
+        # writes straight into the download folder.
+        output_dir = download_dir / "named-outputs" / ANALYSIS_REPORTS_OUTPUT
+        if not output_dir.exists():
+            output_dir = download_dir
 
-            # The SDK writes a named output under ``named-outputs/``, except for
-            # a batch job that is not a pipeline job, whose scoring output it
-            # writes straight into the download folder.
-            output_dir = Path(tmpdir) / "named-outputs" / ANALYSIS_REPORTS_OUTPUT
-            if not output_dir.exists():
-                output_dir = Path(tmpdir)
-
-            return parse_analysis_reports(output_dir)
+        return parse_analysis_reports(output_dir)
 
     def delete_inputs(self, run_prefix: str) -> None:
         """Delete every blob under the run's prefix, one request each.

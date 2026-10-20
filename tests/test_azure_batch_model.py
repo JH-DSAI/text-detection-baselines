@@ -178,6 +178,14 @@ def test_config_from_env_reads_the_job_settings(monkeypatch):
     assert (config.poll_interval_seconds, config.timeout_seconds, config.max_batch_size) == (5.0, 600.0, 50)
 
 
+def test_config_from_env_reads_the_reports_dir(monkeypatch, tmp_path):
+    for name, value in _ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv("TDB_AZURE_BATCH_REPORTS_DIR", str(tmp_path))
+
+    assert AzureBatchConfig.from_env().reports_dir == tmp_path
+
+
 def test_config_from_env_reports_every_missing_variable_at_once(monkeypatch):
     monkeypatch.setenv("TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL", "https://example.blob.core.windows.net")
 
@@ -747,7 +755,7 @@ def test_parse_analysis_reports_skips_an_unusable_record_with_a_warning(tmp_path
     assert "Skipping" in caplog.text
 
 
-def _download(monkeypatch, write_outputs):
+def _download(monkeypatch, write_outputs, **config_overrides):
     """Run :meth:`AzureMLBatchClient.download_results` against a stub ``jobs.download``.
 
     *write_outputs* is called with the download folder, standing in for the SDK
@@ -758,7 +766,7 @@ def _download(monkeypatch, write_outputs):
     """
     ml_client = MagicMock()
     ml_client.jobs.download.side_effect = lambda **kwargs: write_outputs(Path(kwargs["download_path"]))
-    client = AzureMLBatchClient(_config())
+    client = AzureMLBatchClient(_config(**config_overrides))
     monkeypatch.setattr(client, "_ml", lambda: ml_client)
 
     return client.download_results("job-1"), ml_client
@@ -788,3 +796,26 @@ def test_download_results_raises_when_nothing_was_downloaded(monkeypatch):
     # As the SDK does for an output it cannot resolve: no error, no files.
     with pytest.raises(RuntimeError, match="Nothing was downloaded .* job-1"):
         _download(monkeypatch, lambda root: None)
+
+
+def test_download_results_discards_the_download_by_default(monkeypatch):
+    download_paths = []
+
+    def write_outputs(root):
+        download_paths.append(root)
+        _write_report(root, "000000.txt")
+
+    _download(monkeypatch, write_outputs)
+
+    assert not download_paths[0].exists()
+
+
+def test_download_results_keeps_the_download_in_the_reports_dir(monkeypatch, tmp_path):
+    def write_outputs(root):
+        _write_report(root / "named-outputs" / "analysis_reports", "000000.txt")
+
+    records, _ = _download(monkeypatch, write_outputs, reports_dir=tmp_path / "reports")
+
+    assert list(records) == ["000000.txt"]
+    kept = tmp_path / "reports" / "job-1" / "named-outputs" / "analysis_reports"
+    assert sorted(path.name for path in kept.iterdir()) == ["000000.txt.json", "000000.txt.md"]

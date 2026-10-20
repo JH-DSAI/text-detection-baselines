@@ -130,6 +130,12 @@ over. A process killed before it can clean up leaves them under
 `TDB_AZURE_BATCH_BLOB_PREFIX`, so a lifecycle rule on the container that deletes
 blobs under that prefix after a few days is a sensible backstop.
 
+The downloaded reports are discarded once their verdicts are read. To keep them for
+debugging, set `TDB_AZURE_BATCH_REPORTS_DIR`: each job's reports are then saved in a
+folder named for the job under it, and the path is logged. Each report is named for
+its submission, which is numbered by its position among one question's answers in
+dataset order (`000000.txt`, `000001.txt`, ...).
+
 The whole configuration is read and validated at once, on the first call that
 needs it. That includes a
 `TDB_AZURE_BATCH_*` key in `.env` that matches no setting, which is usually a
