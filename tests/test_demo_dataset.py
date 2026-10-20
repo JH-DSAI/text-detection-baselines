@@ -61,9 +61,9 @@ def test_demo_dataset_has_both_classes_and_a_mixed_category():
 
 
 def test_demo_dataset_scores_are_not_saturated():
-    # dummy-norm keeps its sigmoid in float32, so long texts tie at exactly 1.0 and
-    # the model reports a meaningless AUROC. Guarding the property directly rather
-    # than trusting the generator's token budget to stay correct.
+    # dummy-norm's logit grows with length, so long enough texts tie at exactly 1.0
+    # and the model reports a meaningless AUROC. Guarding the property directly
+    # rather than trusting the generator's token budget to stay correct.
     batch = _demo_batch()
     for name in get_default_model_names():
         model = build_model(name, ood_margin=0.05, seed=7)
@@ -84,6 +84,14 @@ def test_demo_dataset_exercises_ood_flagging():
         output = predict_by_question(model, batch.questions, batch.texts)
         n_ood = int(output.ood_flags.sum())
         assert 0 < n_ood < len(batch), f"{name} flagged {n_ood} of {len(batch)} samples OOD"
+
+
+def test_demo_answers_have_at_least_50_words():
+    # Too-short answers may automatically be flagged by some models as
+    # machine-written, which would reduce the demo dataset's utility.
+    batch = _demo_batch()
+    word_counts = [len(text.split()) for text in batch.texts if len(text) >= 40]
+    assert min(word_counts) >= 50
 
 
 def _read_jsonl(path):

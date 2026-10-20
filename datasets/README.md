@@ -38,8 +38,8 @@ Chosen so the suite exercises both slice shapes: `Human`, `Task`, and `Summary` 
 single-label, where ranking metrics are undefined, and `Mixed` has both classes,
 where they are defined. Eight records inside `Mixed` are short enough to be flagged
 out-of-distribution, so OOD restriction runs on a real evaluation rather than only
-in unit tests. Responses are capped at 55 tokens; the cap is not cosmetic, and the
-reasoning is documented at `MAX_TOKENS` in the generator.
+in unit tests. Every other response runs 75 to 120 tokens; neither bound is
+cosmetic, and the reasoning is documented at `MAX_TOKENS` in the generator.
 
 Regenerate with:
 

@@ -39,7 +39,7 @@ licences, and citations.
 | name | default | what it is |
 | --- | --- | --- |
 | `demo` | yes | 200 records of **synthetic** text bundled inside the package. Both classes are separated by deliberately planted surface statistics, so its numbers describe the pipeline, not detection quality. |
-| `demo-one-question` | no | The 12 `demo` records that answer `demo`'s most common question, for a single-job `azure-batch` run. |
+| `demo-one-question` | no | The 11 `demo` records that answer `demo`'s most common question, for a single-job `azure-batch` run. |
 | `gede` | no | The GEDE corpus of student essays and LLM rewrites. **Licensed CC BY-NC-SA 4.0 and not bundled** — you obtain it from [upstream](https://github.com/lukasgehring/Assessing-LLM-Text-Detection-in-Educational-Contexts) and convert it locally. |
 
 To use `gede`,
@@ -109,7 +109,7 @@ For a headless run, export a service principal as
 set in the environment, not in `.env`, which is read only for `TDB_*` settings.
 
 Each question is its own batch job, and jobs run one after another, so start with
-a single question. The bundled `demo-one-question` dataset holds the 12 `demo`
+a single question. The bundled `demo-one-question` dataset holds the 11 `demo`
 answers to one question, so this command evaluates them in one job:
 
 ```bash
@@ -263,12 +263,13 @@ deliberately diverges from the researchers' implementation:
   by 2e-6 on `gede`, `dummy-raw` by 6.5e-5), which is why historical numbers from
   those models remain readable. The inflation is worst when a score vector collapses
   entirely: the trapezoid then returns `prevalence + (1 - prevalence)/2` exactly,
-  which is how `dummy-norm` read 0.9664 against its true AP of 0.9327.
+  which is how `dummy-norm`, whose float32 sigmoid then tied every `gede` score at
+  1.0, read 0.9664 against its true AP of 0.9327.
 
 * **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
   so every model scores AP above 0.93 regardless of ranking quality.
-  `dummy-norm` has AUROC exactly 0.5 — no ranking signal at all — and
-  scores AP 0.9327, which *is* the prevalence to four decimal places. Read AP only
+  `dummy-norm` has AUROC 0.49 — no ranking signal — and scores AP 0.9316,
+  a tenth of a point from the prevalence. Read AP only
   against that floor, and never compare it across slices with different base rates.
 
 * **ECE clips scores into `[0, 1]` before binning.** The reference implementation

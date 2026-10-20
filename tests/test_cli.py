@@ -665,7 +665,7 @@ def test_cli_evaluates_the_one_question_dataset_by_name(runner, tmp_path):
     assert result.exit_code == 0, result.output
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     assert set(metrics["overall"]) == {"demo-one-question"}
-    assert metrics["overall"]["demo-one-question"]["dummy-norm"]["n_samples"] == 12
+    assert metrics["overall"]["demo-one-question"]["dummy-norm"]["n_samples"] == 11
 
 
 def test_text_key_applies_to_a_runtime_registered_dataset(runner, tmp_path, renamed_key_dataset, clean_registry):
