@@ -46,8 +46,8 @@ class TorchLinearStubDetector(TextDetector):
         # ``confidence`` is distance from the decision boundary, so it is *low*
         # for middling scores and high for extreme ones.
         if self.normalized_scores:
-            # The layer's float32 logits run to ~20 on paragraph-length answers, and a
-            # float32 sigmoid ties at exactly 1.0 past ~16. float64 resolves to ~37.
+            # The layer's float32 logits run to ~20 on paragraph-length answers, and
+            # float32 sigmoid becomes 1.0 past a logit of ~16. float64 increases this limit to ~37.
             scores = 1.0 / (1.0 + np.exp(-raw.astype(np.float64)))
             preds = (scores >= 0.5).astype(int)
             confidence = np.abs(scores - 0.5)

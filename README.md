@@ -269,8 +269,8 @@ deliberately diverges from the researchers' implementation:
   by 2e-6 on `gede`, `dummy-raw` by 6.5e-5), which is why historical numbers from
   those models remain readable. The inflation is worst when a score vector collapses
   entirely: the trapezoid then returns `prevalence + (1 - prevalence)/2` exactly,
-  which is how `dummy-norm`, whose float32 sigmoid then tied every `gede` score at
-  1.0, read 0.9664 against its true AP of 0.9327.
+  which is how `dummy-norm`, whose float32 sigmoid then produced uniform 1.0 scores
+  on `gede`, read 0.9664 against its true AP of 0.9327.
 
 * **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
   so every model scores AP above 0.93 regardless of ranking quality.

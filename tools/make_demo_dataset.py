@@ -193,7 +193,7 @@ BORDERLINE_RATE = 0.3
 #
 # Upper bound: under its hard-coded weights ``dummy-norm``'s logit runs about
 # 0.18-0.25 per token, so 120 tokens puts it at 20-30. The stub's sigmoid is
-# computed in float64, which ties at exactly 1.0 only past about 37, so the cap
+# computed in float64, which hits 1.0 only past about 37, so the cap
 # leaves the scores separable. Without a cap the logit grows with length until
 # every score ties, as it does on ``gede``'s longer essays.
 #
