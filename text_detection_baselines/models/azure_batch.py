@@ -385,7 +385,8 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
     """Read ``<doc_id>.json`` verdict records from a downloaded output folder.
 
     Each record's ``submission_id`` is its input (submission) filename, used as
-    its key in the returned dictionary.
+    its key in the returned dictionary. A JSON file with no report beside it is
+    not read, and is named in a warning.
 
     Args:
         output_dir: Directory holding the job's ``analysis_reports`` output.
@@ -394,10 +395,13 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
         Verdict records keyed by submission id (input filename).
     """
     records: dict[str, dict[str, Any]] = {}
+    read_files: set[Path] = set()
+
     # Iterate over reports to find JSON verdicts, as the HopDetect backend does
     for md_file in sorted(output_dir.rglob("*.md")):
         json_file = md_file.with_suffix(".json")
         if json_file.exists():
+            read_files.add(json_file)
             try:
                 record = json.loads(json_file.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
@@ -410,6 +414,15 @@ def parse_analysis_reports(output_dir: Path) -> dict[str, dict[str, Any]]:
 
             submission_id = record["submission_id"]
             records[str(submission_id)] = record
+
+    unused = sorted(str(path.relative_to(output_dir)) for path in output_dir.rglob("*.json") if path not in read_files)
+    if unused:
+        LOGGER.warning(
+            "Ignoring %d JSON file(s) with no report beside them in %s: %s",
+            len(unused),
+            output_dir,
+            _some(unused),
+        )
 
     return records
 

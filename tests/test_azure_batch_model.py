@@ -796,6 +796,25 @@ def test_parse_analysis_reports_skips_an_unusable_record_with_a_warning(tmp_path
 
     assert records == {}
     assert "Skipping" in caplog.text
+    # Already warned about as unusable, so not also reported as unused.
+    assert len(caplog.records) == 1
+
+
+def test_parse_analysis_reports_warns_about_json_files_it_did_not_read(tmp_path, caplog):
+    _write_report(tmp_path, "000000.txt")
+    (tmp_path / "batch_verdict.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "nested" / "orphan.txt.json").parent.mkdir()
+    (tmp_path / "nested" / "orphan.txt.json").write_text("{}", encoding="utf-8")
+
+    records = parse_analysis_reports(tmp_path)
+
+    assert list(records) == ["000000.txt"]
+    assert len(caplog.records) == 1
+    warning = caplog.records[0]
+    assert warning.levelname == "WARNING"
+    assert "batch_verdict.json" in warning.getMessage()
+    assert str(Path("nested") / "orphan.txt.json") in warning.getMessage()
+    assert "000000.txt.json" not in warning.getMessage()
 
 
 def _download(monkeypatch, write_outputs, **config_overrides):
