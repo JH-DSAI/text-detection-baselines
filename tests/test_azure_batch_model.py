@@ -258,7 +258,8 @@ def test_config_from_env_reports_an_unrecognised_dotenv_variable(dotenv):
     # A misspelled key would otherwise leave its field at the default without a word.
     dotenv(*(f"{name}={value}" for name, value in _ENV.items()), "TDB_AZURE_BATCH_STORAGE_CONTANER=mine")
 
-    with pytest.raises(MissingConfigurationError, match="TDB_AZURE_BATCH_STORAGE_CONTANER"):
+    # Word boundaries, so the name with its prefix doubled would not also match.
+    with pytest.raises(MissingConfigurationError, match=r"\bTDB_AZURE_BATCH_STORAGE_CONTANER\b"):
         AzureBatchConfig.from_env()
 
 
