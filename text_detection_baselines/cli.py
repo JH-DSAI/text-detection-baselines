@@ -632,8 +632,8 @@ def main(
             "No models selected. Use --model, or avoid excluding every model.",
         )
 
-    # Resolved and checked before any model is built: constructing ``smollm2``
-    # downloads weights, which should not happen only to fail on a missing dataset.
+    # Resolved and checked before any model runs: ``smollm2`` downloads weights the
+    # first time it scores, which should not happen only to fail on a missing dataset.
     specs = [get_dataset_spec(name) for name in selected_datasets]
     batches: dict[str, FileDatasetBatch] = {}
     for spec in specs:

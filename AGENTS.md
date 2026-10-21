@@ -19,7 +19,7 @@ Two rules keep in-process runs fast, and exist because ignoring them once produc
 looked like they had hung:
 
 * **Never pass `-a` / `--all` / `--all-models` in an in-process test.** It selects `smollm2`,
-  which downloads model weights when constructed, and `azure-batch`, which uploads to Azure
+  which downloads model weights when it first scores, and `azure-batch`, which uploads to Azure
   blob storage and blocks on a remote batch job. Under `CliRunner` the output is captured, so a
   multi-minute download or a network timeout shows no progress at all. Pass explicit `--model`
   names instead. `azure-batch` is safe to test only through an injected fake client — see
