@@ -62,6 +62,8 @@ To evaluate your own file:
 pixi run main -- --register-file-dataset mydata=/path/to/mydata.jsonl
 ```
 
+Note that every dataset needs at least one "real" label and one "fake" label.
+
 ## Models
 
 Apart from `azure-batch`, every model registered in
