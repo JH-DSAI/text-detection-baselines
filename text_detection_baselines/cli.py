@@ -147,6 +147,19 @@ def _raise_for_missing_questions(spec: DatasetSpec, batch: FileDatasetBatch, mod
     )
 
 
+def _raise_for_unavailable_model(model: TextDetector) -> None:
+    """Fail when a model cannot run here, such as for a missing install or setting.
+
+    Checked up front for the same reason as :func:`_load_evaluable_dataset`: the
+    model itself only fails on its first invocation, after the models ahead of it
+    have run.
+    """
+    try:
+        model.check_available()
+    except ModelUnavailableError as exc:
+        raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
+
+
 class NamePathParamType(click.ParamType):
     """Parse and validate a ``NAME=PATH`` CLI value."""
 
@@ -645,6 +658,8 @@ def main(
     for spec in specs:
         for model in model_objs:
             _raise_for_missing_questions(spec, batches[spec.name], model)
+    for model in model_objs:
+        _raise_for_unavailable_model(model)
 
     run_results: list[tuple[str, str, dict, dict]] = []
 
@@ -661,6 +676,7 @@ def main(
                     category_key=dataset.category_key,
                     question_key=dataset.question_key,
                 )
+            # For a registered detector that only finds out when it runs.
             except ModelUnavailableError as exc:
                 raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
             run_results.append((dataset.name, model.model_name, overall, per_cat))

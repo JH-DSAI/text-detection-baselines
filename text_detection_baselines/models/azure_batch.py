@@ -492,6 +492,21 @@ class AzureBatchDetector(TextDetector):
             self._client = AzureMLBatchClient(self.config)
         return self._client
 
+    def check_available(self) -> None:
+        """Check that the Azure SDKs are installed and the settings are usable.
+
+        Both checks are local. Credentials and the endpoint are first tried by
+        :meth:`predict`.
+
+        Raises:
+            MissingDependencyError: If no client was given and the Azure SDKs
+                are not installed.
+            MissingConfigurationError: If no config was given and the
+                ``TDB_AZURE_BATCH_*`` settings are unset or unusable.
+        """
+        self._ensure_client()
+        _ = self.config
+
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
         """Score one assignment's answers on the batch endpoint.
 

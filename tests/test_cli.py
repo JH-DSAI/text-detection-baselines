@@ -899,17 +899,10 @@ def test_cli_reports_a_dataset_with_one_label(runner, tmp_path, clean_registry):
 
 # Safe to run in process despite AGENTS.md's caution about azure-batch: both
 # failures happen before any Azure client is built, and conftest hides the
-# developer's own TDB_* settings, so nothing reaches the network.
-_AZURE_ONLY = [
-    "--model",
-    "azure-batch",
-    "--exclude-model",
-    "dummy-norm",
-    "--exclude-model",
-    "dummy-raw",
-    "--exclude-model",
-    "length",
-]
+# developer's own TDB_* settings, so nothing reaches the network. The default
+# models stay selected, ahead of azure-batch, so that the tests can check that
+# none of them runs before the failure is reported.
+_WITH_AZURE = ["--model", "azure-batch"]
 
 
 @pytest.fixture
@@ -923,33 +916,39 @@ def tiny_dataset_with_question(tmp_path):
     return path
 
 
-def test_cli_reports_missing_azure_sdks_with_how_to_install_them(
-    runner, tiny_dataset_with_question, clean_registry, monkeypatch
+def test_cli_reports_missing_azure_sdks_before_running_any_model(
+    runner, tiny_dataset_with_question, clean_registry, monkeypatch, caplog
 ):
+    caplog.set_level(logging.INFO)
     monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: None)
 
     result = runner.invoke(
         main,
-        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_AZURE_ONLY],
+        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_WITH_AZURE],
     )
 
     assert result.exit_code == 1
     assert "Model 'azure-batch' cannot run" in result.stderr
     assert "pixi run -e azure" in result.stderr
+    assert not any("Evaluating" in record.getMessage() for record in caplog.records)
 
 
-def test_cli_reports_missing_azure_configuration(runner, tiny_dataset_with_question, clean_registry, monkeypatch):
+def test_cli_reports_missing_azure_configuration_before_running_any_model(
+    runner, tiny_dataset_with_question, clean_registry, monkeypatch, caplog
+):
+    caplog.set_level(logging.INFO)
     # The SDKs are reported present, so the next check, the configuration, fails.
     monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: object())
 
     result = runner.invoke(
         main,
-        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_AZURE_ONLY],
+        ["--register-file-dataset", f"tiny={tiny_dataset_with_question}", "--exclude-dataset", "demo", *_WITH_AZURE],
     )
 
     assert result.exit_code == 1
     assert "Model 'azure-batch' cannot run" in result.stderr
     assert "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL" in result.stderr
+    assert not any("Evaluating" in record.getMessage() for record in caplog.records)
 
 
 def test_cli_rejects_answers_without_a_question_before_running_any_model(runner, tiny_dataset, clean_registry, caplog):

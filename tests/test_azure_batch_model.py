@@ -284,6 +284,48 @@ def test_missing_sdks_are_reported_with_how_to_install_them(monkeypatch, find_sp
         detector.predict(_QUESTION, ["a"])
 
 
+def test_check_available_reports_missing_sdks(monkeypatch):
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: None)
+    detector = AzureBatchDetector(
+        model_name="azure-batch", normalized_scores=False, ood_margin=0.08, seed=7, config=_config()
+    )
+
+    with pytest.raises(MissingDependencyError, match=r"pixi run -e azure main"):
+        detector.check_available()
+
+
+def test_check_available_reports_missing_configuration(monkeypatch):
+    # The SDKs are reported present, so the next check, the configuration, fails.
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: object())
+    detector = build_model("azure-batch", ood_margin=0.05, seed=1)
+
+    with pytest.raises(MissingConfigurationError, match="TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL"):
+        detector.check_available()
+
+
+def test_check_available_reads_the_configuration_even_with_a_client():
+    detector = AzureBatchDetector(
+        model_name="azure-batch", normalized_scores=False, ood_margin=0.08, seed=7, client=FakeClient({})
+    )
+
+    with pytest.raises(MissingConfigurationError):
+        detector.check_available()
+
+
+def test_check_available_does_not_import_the_sdks(monkeypatch):
+    # The check runs for every selected model before any is evaluated, so it must
+    # not cost an SDK import, let alone a credential or a request. A ``None`` in
+    # ``sys.modules`` makes importing that module raise.
+    monkeypatch.setattr("text_detection_baselines.models.azure_batch.find_spec", lambda name: object())
+    for name in ("azure", "azure.ai.ml", "azure.identity", "azure.storage.blob"):
+        monkeypatch.setitem(sys.modules, name, None)
+    detector = AzureBatchDetector(
+        model_name="azure-batch", normalized_scores=False, ood_margin=0.08, seed=7, config=_config()
+    )
+
+    detector.check_available()
+
+
 def test_build_model_does_not_touch_the_environment():
     # Construction must stay cheap and credential-free: the CLI builds every
     # selected model before any dataset is scored. The autouse fixture has

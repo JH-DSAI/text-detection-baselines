@@ -42,6 +42,17 @@ class TextDetector(ABC):
         self.ood_margin = ood_margin
         self.seed = seed
 
+    def check_available(self) -> None:
+        """Raise if this detector cannot run here, without running it.
+
+        Lets callers report a missing dependency or setting before invoking any
+        detector, rather than when this one's turn comes. Must stay cheap and
+        local: no downloads or network calls. The default checks nothing.
+
+        Raises:
+            ModelUnavailableError: If a dependency or setting is missing.
+        """
+
     @abstractmethod
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
         """Score one question's answers.
