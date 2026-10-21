@@ -121,7 +121,8 @@ pixi run -e azure main --dataset demo-one-question --exclude-dataset demo --mode
 One `predict` call is one batch job: the answers are uploaded to blob storage, the
 endpoint is invoked, the job is polled to completion, and the per-submission verdicts
 are downloaded. Expect **minutes per invocation**, and a real cost per run.
-Dropped connections while polling are retried until the job's timeout
+The job's state is logged whenever it changes, and again at growing intervals while
+it does not. Dropped connections while polling are retried until the job's timeout
 (`TDB_AZURE_BATCH_TIMEOUT_SECONDS`, a few hours by default). A job that
 times out, is interrupted with Ctrl-C, or can no longer be polled is cancelled rather
 than left running; its name is logged in case the cancellation itself fails.

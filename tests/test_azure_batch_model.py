@@ -10,6 +10,7 @@ handles and check only the request it builds.
 from __future__ import annotations
 
 import json
+import logging
 import sys
 from enum import Enum
 from pathlib import Path
@@ -471,6 +472,45 @@ def test_job_that_never_finishes_times_out_and_is_cancelled(fake_clock):
     assert client.status_calls == 4
     assert fake_clock.now == 90
     assert client.cancelled == ["job-1"]
+
+
+def _state_logs(caplog):
+    return [r.getMessage() for r in caplog.records if r.getMessage().startswith("Batch job job-1 is")]
+
+
+def test_unchanged_state_is_logged_less_and_less_often(caplog):
+    caplog.set_level(logging.INFO)
+    client = FakeClient(
+        {"000000.txt": _record("000000.txt", "No action")},
+        statuses=["Queued", *["Running"] * 16, "Completed"],
+    )
+    _detector(client, poll_interval_seconds=30).predict(_QUESTION, ["a"])
+    # Running is polled from 30s to 480s, which is 450s in that state.
+    assert _state_logs(caplog) == [
+        "Batch job job-1 is Queued",
+        "Batch job job-1 is Running",
+        "Batch job job-1 is still Running after 30s",
+        "Batch job job-1 is still Running after 60s",
+        "Batch job job-1 is still Running after 120s",
+        "Batch job job-1 is still Running after 240s",
+    ]
+
+
+def test_state_change_is_logged_and_restarts_the_backoff(caplog):
+    caplog.set_level(logging.INFO)
+    client = FakeClient(
+        {"000000.txt": _record("000000.txt", "No action")},
+        statuses=["Running", "Running", "Running", "NotResponding", "NotResponding", "Running", "Completed"],
+    )
+    _detector(client, poll_interval_seconds=30).predict(_QUESTION, ["a"])
+    assert _state_logs(caplog) == [
+        "Batch job job-1 is Running",
+        "Batch job job-1 is still Running after 30s",
+        "Batch job job-1 is still Running after 60s",
+        "Batch job job-1 is NotResponding",
+        "Batch job job-1 is still NotResponding after 30s",
+        "Batch job job-1 is Running",
+    ]
 
 
 def test_interrupted_wait_cancels_the_job():

@@ -620,6 +620,10 @@ class AzureBatchDetector(TextDetector):
     def _poll_until_finished(self, client: BatchEndpointClient, job_name: str) -> str:
         """Return the job's terminal status, polling until it has one.
 
+        Each change of state is logged. A state that persists is logged again
+        after exponentially longer intervals, so a job stuck in a state such as
+        ``NotResponding`` is visible without a line for every poll.
+
         A :class:`TransientEndpointError` is logged and polled through; any other
         error from the client ends the wait.
 
@@ -630,7 +634,10 @@ class AzureBatchDetector(TextDetector):
         config = self.config
         deadline = time.monotonic() + config.timeout_seconds
         status = None
+        # When the job entered its current state, and how long after that to next log it.
+        changed_at = remind_after = 0.0
         while True:
+            previous = status
             try:
                 status = client.job_status(job_name)
             except TransientEndpointError as exc:
@@ -638,6 +645,13 @@ class AzureBatchDetector(TextDetector):
             else:
                 if status in _TERMINAL_SUCCESS | _TERMINAL_FAILURE:
                     return status
+                now = time.monotonic()
+                if status != previous:
+                    LOGGER.info("Batch job %s is %s", job_name, status)
+                    changed_at, remind_after = now, config.poll_interval_seconds
+                elif now - changed_at >= remind_after:
+                    LOGGER.info("Batch job %s is still %s after %.0fs", job_name, status, now - changed_at)
+                    remind_after = 2 * (now - changed_at)
 
             if time.monotonic() >= deadline:
                 raise RuntimeError(
