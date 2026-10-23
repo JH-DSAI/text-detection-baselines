@@ -1,4 +1,4 @@
-"""Tests for the bundled synthetic ``demo`` dataset.
+"""Tests for the bundled synthetic ``demo`` and ``demo-one-question`` datasets.
 
 These assert the properties that make ``demo`` usable as the default dataset. Each
 one is a proxy the generator enforces via a token budget; see the ``MAX_TOKENS``
@@ -8,15 +8,19 @@ comment in tools/make_demo_dataset.py.
 from __future__ import annotations
 
 import collections
+import json
 
 import numpy as np
 
 from text_detection_baselines.datasets import (
     dataset_available,
     demo_dataset_path,
+    demo_one_question_dataset_path,
     get_dataset_spec,
+    get_default_dataset_names,
     load_dataset,
 )
+from text_detection_baselines.evaluate import predict_by_question
 from text_detection_baselines.models import build_model, get_default_model_names
 from text_detection_baselines.util import find_package_location
 
@@ -57,13 +61,13 @@ def test_demo_dataset_has_both_classes_and_a_mixed_category():
 
 
 def test_demo_dataset_scores_are_not_saturated():
-    # dummy-norm keeps its sigmoid in float32, so long texts tie at exactly 1.0 and
-    # the model reports a meaningless AUROC. Guarding the property directly rather
-    # than trusting the generator's token budget to stay correct.
+    # dummy-norm's logit grows with length, so long enough texts tie at exactly 1.0
+    # and the model reports a meaningless AUROC. Guarding the property directly
+    # rather than trusting the generator's token budget to stay correct.
     batch = _demo_batch()
     for name in get_default_model_names():
         model = build_model(name, ood_margin=0.05, seed=7)
-        output = model.predict(batch.texts)
+        output = predict_by_question(model, batch.questions, batch.texts)
         distinct = len(np.unique(output.scores))
         assert distinct > len(batch) // 2, f"{name} produced only {distinct} distinct scores"
         if model.normalized_scores:
@@ -76,6 +80,35 @@ def test_demo_dataset_exercises_ood_flagging():
     # outside its own unit tests, and the OOD% column always reads 0.000.
     batch = _demo_batch()
     for name in get_default_model_names():
-        output = build_model(name, ood_margin=0.05, seed=7).predict(batch.texts)
+        model = build_model(name, ood_margin=0.05, seed=7)
+        output = predict_by_question(model, batch.questions, batch.texts)
         n_ood = int(output.ood_flags.sum())
         assert 0 < n_ood < len(batch), f"{name} flagged {n_ood} of {len(batch)} samples OOD"
+
+
+def test_demo_answers_have_at_least_50_words():
+    # Too-short answers may automatically be flagged by some models as
+    # machine-written, which would reduce the demo dataset's utility.
+    batch = _demo_batch()
+    word_counts = [len(text.split()) for text in batch.texts if len(text) >= 40]
+    assert min(word_counts) >= 50
+
+
+def _read_jsonl(path):
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+
+
+def test_demo_one_question_dataset_is_bundled_but_not_a_default():
+    assert demo_one_question_dataset_path().is_relative_to(find_package_location())
+    assert dataset_available(get_dataset_spec("demo-one-question"))
+    assert "demo-one-question" not in get_default_dataset_names()
+
+
+def test_demo_one_question_dataset_is_every_demo_answer_to_one_question():
+    # A verbatim subset, so its numbers are comparable with demo's, and complete for
+    # its question, so a detector calibrating across one assignment sees all of it.
+    rows = _read_jsonl(demo_one_question_dataset_path())
+    (question,) = {row["question"] for row in rows}
+    assert rows == [row for row in _read_jsonl(demo_dataset_path()) if row["question"] == question]
+    # The CLI refuses a dataset with only one class.
+    assert {row["label"] for row in rows} == {"real", "fake"}

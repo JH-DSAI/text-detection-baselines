@@ -19,15 +19,27 @@ pixi run main
 
 The first run resolves a ~800 MB Python environment, most of it PyTorch.
 
+## Configuration
+
+Settings are read from `TDB_*` environment variables, falling back to a `.env` file
+in the working directory. [.env.example](.env.example) lists every variable: copy
+it to `.env` and fill in what you need. A variable left blank counts as unset.
+
+| variables | configure |
+| --- | --- |
+| `TDB_GEDE_PATH` | where the `gede` dataset is prepared and looked up; see [datasets/README.md](datasets/README.md) |
+| `TDB_AZURE_BATCH_*` | the `azure-batch` model's endpoint; see [The `azure-batch` model](#the-azure-batch-model) |
+
 ## Datasets
 
-Two datasets
+Three datasets
 are registered; see [datasets/README.md](datasets/README.md) for provenance,
 licences, and citations.
 
 | name | default | what it is |
 | --- | --- | --- |
 | `demo` | yes | 200 records of **synthetic** text bundled inside the package. Both classes are separated by deliberately planted surface statistics, so its numbers describe the pipeline, not detection quality. |
+| `demo-one-question` | no | The 11 `demo` records that answer `demo`'s most common question, for a single-job `azure-batch` run. |
 | `gede` | no | The GEDE corpus of student essays and LLM rewrites. **Licensed CC BY-NC-SA 4.0 and not bundled** — you obtain it from [upstream](https://github.com/lukasgehring/Assessing-LLM-Text-Detection-in-Educational-Contexts) and convert it locally. |
 
 To use `gede`,
@@ -50,11 +62,14 @@ To evaluate your own file:
 pixi run main -- --register-file-dataset mydata=/path/to/mydata.jsonl
 ```
 
+Note that every dataset needs at least one "real" label and one "fake" label.
+
 ## Models
 
-Every model currently registered in [models/](text_detection_baselines/models/) is a **stub**.
-None of them are trained, and none should be treated as a working detector — they
-exist to exercise the evaluation pipeline end to end with realistic-looking outputs.
+Apart from `azure-batch`, every model registered in
+[models/](text_detection_baselines/models/) is a **stub**. None of them are trained,
+and none should be treated as a working detector — they exist to exercise the
+evaluation pipeline end to end with realistic-looking outputs.
 
 | name | what it does |
 | --- | --- |
@@ -62,10 +77,82 @@ exist to exercise the evaluation pipeline end to end with realistic-looking outp
 | `dummy-raw` | Same arbitrary weights, raw logit reported as an unnormalized score. |
 | `length` | Hand-written heuristic: longer texts with lower type-token ratio and less punctuation score as more machine-like. An actual (weak, unvalidated) hypothesis, unlike the `dummy-*` pair. |
 | `smollm2` | Prompts a small local LLM. Not a default; opt in with `--model smollm2`. |
+| `azure-batch` | The real HopDetect detector, via its Azure ML batch endpoint. Not a default; needs credentials and makes remote calls. |
 
 The `dummy-*` weights were picked by hand and fit to nothing. Their metrics measure
 the harness, not detection quality, and any apparent skill they show on a dataset is
 an artifact of that dataset's length distribution.
+
+Models are invoked **once per question**: one question together with the answers
+written in response to it. This mirrors a real-world educational deployment, which
+plausibly receives all submissions for an assignment at once and can use batch
+statistics in prediction. Rows are grouped by their `--question-key` field, so a
+dataset spanning many prompts produces one invocation per prompt. The stub models
+ignore the question and score each answer on its own; `azure-batch` needs it, because
+the pipeline builds a per-assignment support set from the prompt, and a dataset with
+any answer that has no question is rejected before anything runs.
+
+### The `azure-batch` model
+
+The `azure-batch` model calls a HopDetect pipeline hosted on Azure ML.
+
+It is configured via `TDB_AZURE_BATCH_*` variables, set in
+the environment or in `.env` (see [Configuration](#configuration)).
+Required variables: `TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL`,
+`TDB_AZURE_BATCH_STORAGE_CONTAINER`, `TDB_AZURE_BATCH_DATASTORE_NAME`,
+`TDB_AZURE_BATCH_ML_SUBSCRIPTION_ID`, `TDB_AZURE_BATCH_ML_RESOURCE_GROUP`,
+`TDB_AZURE_BATCH_ML_WORKSPACE_NAME`.
+See [.env.example](.env.example) for optional variables and defaults.
+
+Authentication is specified separately.  To run the evaluation harness locally,
+do `az login` and the harness will use those credentials.
+For a headless run, export a service principal as
+`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`. Those must be
+set in the environment, not in `.env`, which is read only for `TDB_*` settings.
+
+Each question is its own batch job, and jobs run one after another, so start with
+a single question. The bundled `demo-one-question` dataset holds the 11 `demo`
+answers to one question, so this command evaluates them in one job:
+
+```bash
+pixi run -e azure main --dataset demo-one-question --exclude-dataset demo --model azure-batch
+```
+
+#### `azure-batch` model details
+
+One `predict` call is one batch job: the answers are uploaded to blob storage, the
+endpoint is invoked, the job is polled to completion, and the per-submission verdicts
+are downloaded. Expect **minutes per invocation**, and a real cost per run.
+The job's state is logged whenever it changes, and again at growing intervals while
+it does not. Dropped connections while polling are retried until the job's timeout
+(`TDB_AZURE_BATCH_TIMEOUT_SECONDS`, a few hours by default). A job that
+times out, is interrupted with Ctrl-C, or can no longer be polled is cancelled rather
+than left running; its name is logged in case the cancellation itself fails.
+Either way, the answers uploaded for a job are deleted from blob storage once it is
+over. A process killed before it can clean up leaves them under
+`TDB_AZURE_BATCH_BLOB_PREFIX`, so a lifecycle rule on the container that deletes
+blobs under that prefix after a few days is a sensible backstop.
+
+The downloaded reports are discarded once their verdicts are read. To keep them for
+debugging, set `TDB_AZURE_BATCH_REPORTS_DIR`: each job's reports are then saved in a
+folder named for the job under it, and the path is logged. Each report is named for
+its submission, which is numbered by its position among one question's answers in
+dataset order (`000000.txt`, `000001.txt`, ...).
+
+The whole configuration is read and validated at once, on the first call that
+needs it. That includes a
+`TDB_AZURE_BATCH_*` key in `.env` that matches no setting, which is usually a
+typo. A misspelled variable exported in the shell cannot be detected this way
+and is ignored.
+
+HopDetect verdicts map onto the harness's outputs as follows. The endpoint's raw `score` is judged against `tau`, a *per-document* threshold, so raw scores are not comparable across submissions.  The reported score is
+the margin `score - tau`, which is unbounded rather than in `[0, 1]`.
+
+| harness output | HopDetect endpoint field |
+| --- | --- |
+| `predictions` | `is_flagged` (decision `Flag for review`) |
+| `ood_flags` | decision `Inconclusive` — a submission the detector declined to assess |
+| `scores` | `score - tau` |
 
 ## Metrics
 
@@ -185,12 +272,13 @@ deliberately diverges from the researchers' implementation:
   by 2e-6 on `gede`, `dummy-raw` by 6.5e-5), which is why historical numbers from
   those models remain readable. The inflation is worst when a score vector collapses
   entirely: the trapezoid then returns `prevalence + (1 - prevalence)/2` exactly,
-  which is how `dummy-norm` read 0.9664 against its true AP of 0.9327.
+  which is how `dummy-norm`, whose float32 sigmoid then produced uniform 1.0 scores
+  on `gede`, read 0.9664 against its true AP of 0.9327.
 
 * **Average precision is floored by class prevalence.** `gede` is 93.27% machine,
   so every model scores AP above 0.93 regardless of ranking quality.
-  `dummy-norm` has AUROC exactly 0.5 — no ranking signal at all — and
-  scores AP 0.9327, which *is* the prevalence to four decimal places. Read AP only
+  `dummy-norm` has AUROC 0.49 — no ranking signal — and scores AP 0.9316,
+  a tenth of a point from the prevalence. Read AP only
   against that floor, and never compare it across slices with different base rates.
 
 * **ECE clips scores into `[0, 1]` before binning.** The reference implementation
