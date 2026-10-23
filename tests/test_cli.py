@@ -958,7 +958,7 @@ def test_cli_rejects_answers_without_a_question_before_running_any_model(runner,
     # but must not run ahead of the failure either.
     result = runner.invoke(
         main,
-        ["--register-file-dataset", f"tiny={tiny_dataset}", "--exclude-dataset", "demo", "--model", "azure-batch"],
+        ["--register-file-dataset", f"tiny={tiny_dataset}", "--exclude-dataset", "demo", *_WITH_AZURE],
     )
 
     assert result.exit_code == 1
