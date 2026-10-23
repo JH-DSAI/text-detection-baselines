@@ -683,16 +683,13 @@ def _stub_azure_core_exceptions(monkeypatch):
     """Install stand-ins for the azure-core exceptions, which the dev environment lacks."""
     module = ModuleType("azure.core.exceptions")
 
-    class AzureError(Exception):
-        pass
-
-    class HttpResponseError(AzureError):
+    class HttpResponseError(Exception):
         def __init__(self, message="", status_code=None):
             super().__init__(message)
             self.status_code = status_code
 
-    module.ServiceRequestError = type("ServiceRequestError", (AzureError,), {})
-    module.ServiceResponseError = type("ServiceResponseError", (AzureError,), {})
+    module.ServiceRequestError = type("ServiceRequestError", (Exception,), {})
+    module.ServiceResponseError = type("ServiceResponseError", (Exception,), {})
     module.HttpResponseError = HttpResponseError
     monkeypatch.setitem(sys.modules, "azure.core.exceptions", module)
     return module
