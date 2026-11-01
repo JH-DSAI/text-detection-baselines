@@ -37,7 +37,7 @@ docs = [
 # azure-ai-ml 1.35 (through at least 1.35.2) cannot resolve a job's data outputs,
 # so `jobs.download(output_name=...)` silently downloads nothing.
 azure = [
-    "azure-ai-ml>=1.20,<1.35",
+    "azure-ai-ml>=1.20,<1.36",
     "azure-identity>=1.17",
     "azure-storage-blob>=12.20"
 ]
