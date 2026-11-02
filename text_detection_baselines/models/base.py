@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from .cache import ScoreCache
 
 
 @dataclass
@@ -35,6 +39,11 @@ class TextDetector(ABC):
     #: Whether :meth:`predict` needs a non-empty question, so that callers can
     #: reject a dataset without questions before invoking the detector at all.
     requires_question: bool = False
+
+    #: Where a detector whose scoring is expensive keeps what it has scored, so
+    #: that a rerun can skip it. Set by the caller; None scores everything anew.
+    #: Detectors that are cheap to run ignore it.
+    score_cache: ScoreCache | None = None
 
     def __init__(self, model_name: str, normalized_scores: bool, ood_margin: float, seed: int) -> None:
         self.model_name = model_name

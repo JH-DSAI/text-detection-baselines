@@ -42,11 +42,14 @@ from .datasets import (
 from .evaluate import build_results_tree, evaluate_model_on_dataset
 from .models import (
     ModelUnavailableError,
+    ScoreCache,
     TextDetector,
     build_model,
     get_default_model_names,
     list_registered_models,
+    resolve_score_cache_path,
 )
+from .models.cache import SCORE_CACHE_PATH_ENV_VAR
 
 LOGGER = logging.getLogger(__name__)
 
@@ -158,6 +161,20 @@ def _raise_for_unavailable_model(model: TextDetector) -> None:
         model.check_available()
     except ModelUnavailableError as exc:
         raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
+
+
+def _open_score_cache(mode: str) -> ScoreCache | None:
+    """Build the score cache for a ``--cache`` mode, or None for ``off``."""
+    if mode == "off":
+        return None
+    return ScoreCache(resolve_score_cache_path(), refresh=mode == "refresh")
+
+
+def _close_score_cache(cache: ScoreCache) -> None:
+    """Close the score cache, logging how much of the run it supplied and saved, if any."""
+    if cache.hits or cache.writes:
+        LOGGER.info("Score cache %s: read %d entries, wrote %d", cache.path, cache.hits, cache.writes)
+    cache.close()
 
 
 class NamePathParamType(click.ParamType):
@@ -552,6 +569,19 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     show_default=True,
     help="Uncertainty margin for OOD flagging.",
 )
+@click.option(
+    "--cache",
+    "cache_mode",
+    type=click.Choice(["on", "refresh", "off"], case_sensitive=False),
+    default="on",
+    show_default=True,
+    help=(
+        "Use of the on-disk score cache, kept by the models that are expensive to run "
+        "(smollm2, azure-batch): 'on' reuses cached scores and saves new ones, 'refresh' "
+        "rescores everything and overwrites them, 'off' neither reads nor writes it. "
+        f"Set its location with {SCORE_CACHE_PATH_ENV_VAR}."
+    ),
+)
 def main(
     datasets: tuple[str, ...],
     models: tuple[str, ...],
@@ -570,6 +600,7 @@ def main(
     question_key: str,
     seed: int,
     ood_margin: float,
+    cache_mode: str,
 ) -> None:
     """Evaluate registered text detection models on one or more datasets."""
     if not 0.0 <= target_alpha <= 1.0:
@@ -661,25 +692,34 @@ def main(
     for model in model_objs:
         _raise_for_unavailable_model(model)
 
+    score_cache = _open_score_cache(cache_mode)
+    for model in model_objs:
+        model.score_cache = score_cache
+
     run_results: list[tuple[str, str, dict, dict]] = []
 
-    for dataset in specs:
-        for model in model_objs:
-            LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset.name)
-            try:
-                overall, per_cat = evaluate_model_on_dataset(
-                    dataset_path=dataset.path,
-                    model=model,
-                    target_alpha=target_alpha,
-                    text_key=dataset.text_key,
-                    label_key=dataset.label_key,
-                    category_key=dataset.category_key,
-                    question_key=dataset.question_key,
-                )
-            # For a registered detector that only finds out when it runs.
-            except ModelUnavailableError as exc:
-                raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
-            run_results.append((dataset.name, model.model_name, overall, per_cat))
+    try:
+        for dataset in specs:
+            for model in model_objs:
+                LOGGER.info("Evaluating model=%s on dataset=%s", model.model_name, dataset.name)
+                try:
+                    overall, per_cat = evaluate_model_on_dataset(
+                        dataset_path=dataset.path,
+                        model=model,
+                        target_alpha=target_alpha,
+                        text_key=dataset.text_key,
+                        label_key=dataset.label_key,
+                        category_key=dataset.category_key,
+                        question_key=dataset.question_key,
+                    )
+                # For a registered detector that only finds out when it runs.
+                except ModelUnavailableError as exc:
+                    raise click.ClickException(f"Model '{model.model_name}' cannot run: {exc}") from exc
+                run_results.append((dataset.name, model.model_name, overall, per_cat))
+    finally:
+        # Also when the run fails, so that what it did save is reported.
+        if score_cache is not None:
+            _close_score_cache(score_cache)
 
     tree = build_results_tree(run_results)
     render_console_tables(tree)

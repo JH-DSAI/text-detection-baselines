@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 
 import click
+import numpy as np
 import pytest
 
 from text_detection_baselines import cli as cli_module
@@ -23,6 +24,8 @@ from text_detection_baselines.cli import (
     render_console_tables,
 )
 from text_detection_baselines.datasets import DatasetSpec, register_file_dataset
+from text_detection_baselines.models import MODEL_REGISTRY, ModelOutput, TextDetector, register_model
+from text_detection_baselines.models.cache import resolve_score_cache_path
 
 
 def test_resolve_selection_uses_defaults_when_not_all():
@@ -964,3 +967,84 @@ def test_cli_rejects_answers_without_a_question_before_running_any_model(runner,
     assert result.exit_code == 1
     assert "needs a question for every answer, but 4 of 4 answers in dataset 'tiny'" in result.stderr
     assert not any("Evaluating" in record.getMessage() for record in caplog.records)
+
+
+class _CachingProbe(TextDetector):
+    """A detector that keeps a score cache as the expensive ones do, recording each answer it scores."""
+
+    def __init__(self, scored: list[str]) -> None:
+        super().__init__("caching-probe", normalized_scores=False, ood_margin=0.0, seed=0)
+        self.scored = scored
+
+    def predict(self, question: str, answers: list[str]) -> ModelOutput:
+        scores = []
+        for text in answers:
+            score = self.score_cache.get("probe", {"text": text}) if self.score_cache is not None else None
+            if score is None:
+                score = float(len(text))
+                self.scored.append(text)
+                if self.score_cache is not None:
+                    self.score_cache.put("probe", {"text": text}, score)
+            scores.append(score)
+        return ModelOutput(
+            scores=np.array(scores),
+            predictions=np.zeros(len(answers), dtype=int),
+            ood_flags=np.zeros(len(answers), dtype=bool),
+        )
+
+
+@pytest.fixture
+def probe_scored():
+    """Register :class:`_CachingProbe` for the test, returning the answers it scores."""
+    scored: list[str] = []
+    register_model("caching-probe", lambda ood_margin, seed: _CachingProbe(scored), is_default=False)
+    try:
+        yield scored
+    finally:
+        MODEL_REGISTRY.pop("caching-probe", None)
+
+
+def _run_probe(runner, tiny_dataset, *args):
+    result = runner.invoke(
+        main,
+        [
+            "--register-file-dataset",
+            f"tiny={tiny_dataset}",
+            "--exclude-dataset",
+            "demo",
+            "--model",
+            "caching-probe",
+            *[arg for name in ("dummy-norm", "dummy-raw", "length") for arg in ("--exclude-model", name)],
+            *args,
+        ],
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_cli_reuses_cached_scores_on_a_later_run(runner, tiny_dataset, clean_registry, probe_scored, caplog):
+    caplog.set_level(logging.INFO)
+    _run_probe(runner, tiny_dataset)
+    probe_scored.clear()
+    caplog.clear()
+
+    _run_probe(runner, tiny_dataset)
+
+    assert probe_scored == []
+    assert f"Score cache {resolve_score_cache_path()}: read 4 entries, wrote 0" in caplog.text
+
+
+def test_cli_cache_refresh_rescores_everything(runner, tiny_dataset, clean_registry, probe_scored):
+    _run_probe(runner, tiny_dataset)
+    probe_scored.clear()
+
+    _run_probe(runner, tiny_dataset, "--cache", "refresh")
+
+    assert len(probe_scored) == 4
+
+
+def test_cli_cache_off_neither_reads_nor_writes_the_cache(runner, tiny_dataset, clean_registry, probe_scored):
+    _run_probe(runner, tiny_dataset, "--cache", "off")
+    _run_probe(runner, tiny_dataset, "--cache", "off")
+
+    assert len(probe_scored) == 8
+    assert not resolve_score_cache_path().exists()

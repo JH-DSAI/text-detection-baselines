@@ -16,6 +16,7 @@ from click.testing import CliRunner
 
 from text_detection_baselines.datasets import DATASET_REGISTRY
 from text_detection_baselines.models.azure_batch import AzureBatchConfig
+from text_detection_baselines.models.cache import SCORE_CACHE_PATH_ENV_VAR
 from text_detection_baselines.settings import ENV_PREFIX, Settings
 
 #: Every settings model, all of which read ``TDB_*`` variables and ``.env``.
@@ -69,7 +70,7 @@ def _restore_root_logger():
 
 
 @pytest.fixture(autouse=True)
-def _isolated_settings(monkeypatch):
+def _isolated_settings(monkeypatch, tmp_path):
     """Hide the developer's own ``TDB_*`` configuration from every test.
 
     The settings models read the process environment and a ``.env`` file in the working
@@ -77,12 +78,16 @@ def _isolated_settings(monkeypatch):
     lives. Without this, a machine configured to reach a real endpoint would silently supply
     values the tests expect to be absent, or override the defaults they assert on. Clearing
     the environment alone is not enough, as ``.env`` fills in whatever it lacks.
+
+    The score cache is then pointed into the test's own ``tmp_path``, since a CLI run uses
+    it by default and would otherwise read and write the developer's real one.
     """
     for name in list(os.environ):
         if name.startswith(ENV_PREFIX):
             monkeypatch.delenv(name)
     for settings_cls in _SETTINGS_MODELS:
         monkeypatch.setitem(settings_cls.model_config, "env_file", None)
+    monkeypatch.setenv(SCORE_CACHE_PATH_ENV_VAR, str(tmp_path / "score-cache.sqlite3"))
 
 
 @pytest.fixture

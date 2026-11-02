@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from ..settings import ENV_PREFIX, Settings
+from ..settings import ENV_PREFIX, Settings, user_cache_dir
 from .file import (
     DEFAULT_CATEGORY_KEY,
     DEFAULT_LABEL_KEY,
@@ -172,9 +171,7 @@ def demo_one_question_dataset_path() -> Path:
 
 def gede_cache_dir() -> Path:
     """Return the user cache directory prepared datasets default to."""
-    xdg_cache = os.environ.get("XDG_CACHE_HOME")
-    root = Path(xdg_cache).expanduser() if xdg_cache else Path.home() / ".cache"
-    return root / "text-detection-baselines"
+    return user_cache_dir()
 
 
 def _checkout_datasets_dir() -> Path:

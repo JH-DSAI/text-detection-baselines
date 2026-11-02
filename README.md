@@ -29,6 +29,7 @@ it to `.env` and fill in what you need. A variable left blank counts as unset.
 | --- | --- |
 | `TDB_GEDE_PATH` | where the `gede` dataset is prepared and looked up; see [datasets/README.md](datasets/README.md) |
 | `TDB_AZURE_BATCH_*` | the `azure-batch` model's endpoint; see [The `azure-batch` model](#the-azure-batch-model) |
+| `TDB_SCORE_CACHE_PATH` | where the models that are expensive to run cache their scores; see [Score cache](#score-cache) |
 
 ## Datasets
 
@@ -92,6 +93,33 @@ ignore the question and score each answer on its own; `azure-batch` needs it, be
 the pipeline builds a per-assignment support set from the prompt, and a dataset with
 any answer that has no question is rejected before anything runs.
 
+### Score cache
+
+`smollm2` and `azure-batch` are slow or cost money to run, so each one saves its
+scores to an on-disk cache as soon as it has them, and checks there before scoring
+anything. A rerun only scores what no earlier run has, and a run that fails or is
+interrupted partway picks up where it stopped. `smollm2` caches each answer's
+probability. `azure-batch` caches each job's verdicts, so a rerun submits only the
+jobs that have not finished before. The stub models are cheap and cache nothing.
+
+Each entry is keyed by everything that determines it: the model and its version,
+the settings that change its output, and the input. For `smollm2` that is the
+Hugging Face model and revision and the full prompt. For `azure-batch` it is the
+workspace, endpoint, deployment, data assets, and the question and answers as
+submitted. The cache holds the model's raw result rather than the reported score,
+prediction, and OOD flag. A change to how those are derived, `--ood-margin`
+included, therefore still reads from the cache. Keys are stored only as hashes.
+
+The cache cannot detect a change behind a name it keys on, such as a deployment
+updated in place under the same name. After such a change, run with
+`--cache refresh`, which rescores everything and overwrites what is cached.
+`--cache off` neither reads nor writes the cache.
+
+The cache is a single SQLite file, by default
+`${XDG_CACHE_HOME:-~/.cache}/text-detection-baselines/scores.sqlite3`. Set
+`TDB_SCORE_CACHE_PATH` to keep it elsewhere, and delete the file to empty the cache.
+At the end of a run, how many entries were read from it and written to it is logged.
+
 ### The `azure-batch` model
 
 The `azure-batch` model calls a HopDetect pipeline hosted on Azure ML.
@@ -112,7 +140,9 @@ set in the environment, not in `.env`, which is read only for `TDB_*` settings.
 
 Each question is its own batch job, and jobs run one after another, so start with
 a single question. The bundled `demo-one-question` dataset holds the 11 `demo`
-answers to one question, so this command evaluates them in one job:
+answers to one question, so this command evaluates them in one job (set
+`TDB_AZURE_BATCH_DEPLOYMENT_NAME` first, or nothing is
+[cached](#score-cache)):
 
 ```bash
 pixi run -e azure main --dataset demo-one-question --exclude-dataset demo --model azure-batch
@@ -133,11 +163,20 @@ over. A process killed before it can clean up leaves them under
 `TDB_AZURE_BATCH_BLOB_PREFIX`, so a lifecycle rule on the container that deletes
 blobs under that prefix after a few days is a sensible backstop.
 
+Each job's verdicts are saved to the [score cache](#score-cache) as soon as the
+job finishes, provided every submission has one. Rerunning an evaluation that failed
+at its tenth question therefore resubmits from the tenth question on. Caching
+requires `TDB_AZURE_BATCH_DEPLOYMENT_NAME` to be set. The endpoint's default
+deployment can change between runs, and verdicts cached under one deployment would
+be reported as the other's. With the variable unset, every run submits every job,
+and a warning says so.
+
 The downloaded reports are discarded once their verdicts are read. To keep them for
 debugging, set `TDB_AZURE_BATCH_REPORTS_DIR`: each job's reports are then saved in a
 folder named for the job under it, and the path is logged. Each report is named for
 its submission, which is numbered by its position among one question's answers in
-dataset order (`000000.txt`, `000001.txt`, ...).
+dataset order (`000000.txt`, `000001.txt`, ...). A job read from the score cache
+downloads nothing, so it adds no reports.
 
 The whole configuration is read and validated at once, on the first call that
 needs it. That includes a

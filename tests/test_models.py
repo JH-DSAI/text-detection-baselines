@@ -13,6 +13,7 @@ from text_detection_baselines.models import (
     register_model,
 )
 from text_detection_baselines.models.base import ModelOutput
+from text_detection_baselines.models.cache import ScoreCache
 from text_detection_baselines.models.length_heuristic import LengthHeuristicStubDetector
 from text_detection_baselines.models.prompting_smol import SmolLMPromptingDetector
 from text_detection_baselines.models.torch_linear import TorchLinearStubDetector
@@ -127,3 +128,65 @@ def test_prompting_model_predict_shape_with_monkeypatch(monkeypatch):
     assert output.ood_flags.shape == (3,)
     assert np.all(output.scores >= 0.0)
     assert np.all(output.scores <= 1.0)
+
+
+@pytest.fixture
+def scored_texts(monkeypatch):
+    """Stand in for SmolLM2's forward passes, recording each text that is scored."""
+    scored = []
+
+    def fake_score_single(self, text: str) -> float:
+        scored.append(text)
+        return 0.8 if "machine" in text else 0.2
+
+    monkeypatch.setattr(SmolLMPromptingDetector, "_score_single", fake_score_single)
+    return scored
+
+
+def _cached_smollm2(cache_path, ood_margin=0.1, **kwargs):
+    """A detector reading a fresh handle on *cache_path*, as a separate run would."""
+    model = SmolLMPromptingDetector("smollm2", normalized_scores=True, ood_margin=ood_margin, seed=1, **kwargs)
+    model.score_cache = ScoreCache(cache_path)
+    return model
+
+
+def test_prompting_model_reads_its_scores_back_from_the_cache(scored_texts, tmp_path):
+    expected = _cached_smollm2(tmp_path / "scores.sqlite3").predict(_QUESTION, _TEXTS)
+    scored_texts.clear()
+
+    output = _cached_smollm2(tmp_path / "scores.sqlite3").predict(_QUESTION, _TEXTS)
+
+    assert scored_texts == []
+    np.testing.assert_array_equal(output.scores, expected.scores)
+    np.testing.assert_array_equal(output.ood_flags, expected.ood_flags)
+
+
+def test_prompting_model_caches_each_answer_on_its_own(scored_texts, tmp_path):
+    # The question is ignored, so a different question or subset of answers
+    # still reuses the scores of the answers it shares.
+    _cached_smollm2(tmp_path / "scores.sqlite3").predict(_QUESTION, _TEXTS[:2])
+    scored_texts.clear()
+
+    _cached_smollm2(tmp_path / "scores.sqlite3").predict("Another question entirely?", _TEXTS)
+
+    assert scored_texts == [_TEXTS[2]]
+
+
+def test_prompting_model_applies_a_new_ood_margin_to_cached_scores(scored_texts, tmp_path):
+    _cached_smollm2(tmp_path / "scores.sqlite3", ood_margin=0.0).predict(_QUESTION, _TEXTS)
+    scored_texts.clear()
+
+    output = _cached_smollm2(tmp_path / "scores.sqlite3", ood_margin=0.4).predict(_QUESTION, _TEXTS)
+
+    assert scored_texts == []
+    # Every fake score is 0.3 from 0.5, so inside the wider margin.
+    assert output.ood_flags.all()
+
+
+def test_prompting_model_rescores_under_another_revision(scored_texts, tmp_path):
+    _cached_smollm2(tmp_path / "scores.sqlite3", hf_revision="aaa").predict(_QUESTION, _TEXTS)
+    scored_texts.clear()
+
+    _cached_smollm2(tmp_path / "scores.sqlite3", hf_revision="bbb").predict(_QUESTION, _TEXTS)
+
+    assert scored_texts == _TEXTS
