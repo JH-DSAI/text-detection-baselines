@@ -9,12 +9,20 @@ the component is used, and a checkout without it configured still loads these.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 #: Prefix shared by every environment variable this package reads.
 ENV_PREFIX = "TDB_"
+
+
+def user_cache_dir() -> Path:
+    """Return the user cache directory that files this package writes default to."""
+    xdg_cache = os.environ.get("XDG_CACHE_HOME")
+    root = Path(xdg_cache).expanduser() if xdg_cache else Path.home() / ".cache"
+    return root / "text-detection-baselines"
 
 
 class Settings(BaseSettings):
@@ -36,3 +44,7 @@ class Settings(BaseSettings):
     # Where the prepared GEDE dataset is written and looked up, overriding the
     # search in ``datasets.resolve_gede_path``.
     gede_path: Path | None = None
+
+    # The score cache file, overriding ``models.cache.resolve_score_cache_path``'s
+    # default in the user cache directory.
+    score_cache_path: Path | None = None

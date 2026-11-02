@@ -9,6 +9,13 @@ import torch
 
 from .base import ModelOutput, TextDetector
 
+#: Namespace of this detector's entries in the score cache.
+_SCORE_CACHE_NAMESPACE = "smollm2-prompting/machine-probability"
+
+#: Part of every cache key. Bump it when a change to how a text is scored would
+#: change its score; the model, its revision, and the full prompt are already keyed.
+_SCORE_CACHE_VERSION = 1
+
 
 class SmolLMPromptingDetector(TextDetector):
     """Prompt-based detector powered by local HuggingFaceTB/SmolLM2-135M-Instruct.
@@ -20,6 +27,10 @@ class SmolLMPromptingDetector(TextDetector):
     The question is ignored: each answer is judged on its own, and
     the prompt is deliberately left unchanged so this baseline's scores stay
     comparable across datasets that do and do not carry a question.
+
+    Each answer's probability is kept in :attr:`score_cache`, when one is set,
+    as soon as it is computed. The OOD flags are derived from it afresh on every
+    call, so a different ``ood_margin`` still reads from the cache.
     """
 
     def __init__(
@@ -100,8 +111,25 @@ class SmolLMPromptingDetector(TextDetector):
         probs /= probs.sum()
         return float(probs[1])
 
+    def _cached_score(self, text: str) -> float:
+        """Score one text, reading and adding to :attr:`score_cache` if one is set."""
+        if self.score_cache is None:
+            return self._score_single(text)
+
+        key = {
+            "version": _SCORE_CACHE_VERSION,
+            "hf_model_id": self.hf_model_id,
+            "hf_revision": self.hf_revision,
+            "prompt": self._build_prompt(text),
+        }
+        score = self.score_cache.get(_SCORE_CACHE_NAMESPACE, key)
+        if score is None:
+            score = self._score_single(text)
+            self.score_cache.put(_SCORE_CACHE_NAMESPACE, key, score)
+        return float(score)
+
     def predict(self, question: str, answers: list[str]) -> ModelOutput:
-        scores = np.array([self._score_single(text) for text in answers], dtype=float)
+        scores = np.array([self._cached_score(text) for text in answers], dtype=float)
         preds = (scores >= 0.5).astype(int)
 
         lengths = np.array([len(t) for t in answers], dtype=float)

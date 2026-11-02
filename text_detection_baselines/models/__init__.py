@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from .azure_batch import AzureBatchDetector
 from .base import ModelOutput, ModelUnavailableError, TextDetector
+from .cache import ScoreCache, resolve_score_cache_path
 from .length_heuristic import LengthHeuristicStubDetector
 from .prompting_smol import SmolLMPromptingDetector
 from .torch_linear import TorchLinearStubDetector
@@ -27,6 +28,8 @@ __all__ = [
     "ModelSpec",
     "ModelUnavailableError",
     "register_model",
+    "resolve_score_cache_path",
+    "ScoreCache",
     "SmolLMPromptingDetector",
     "TextDetector",
     "TorchLinearStubDetector",

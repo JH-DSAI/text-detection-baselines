@@ -47,6 +47,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from ..settings import ENV_PREFIX
 from .base import ModelOutput, ModelUnavailableError, TextDetector
+from .cache import ScoreCache
 
 LOGGER = logging.getLogger(__name__)
 
@@ -71,6 +72,14 @@ ANALYSIS_REPORTS_OUTPUT = "analysis_reports"
 
 #: The SDK modules :class:`AzureMLBatchClient` imports, from the ``azure`` extra.
 _AZURE_SDK_MODULES = ("azure.ai.ml", "azure.identity", "azure.storage.blob")
+
+#: Namespace of this detector's entries in the score cache.
+_SCORE_CACHE_NAMESPACE = "azure-batch/verdicts"
+
+#: Part of every cache key. Bump it when a change to what a job is sent would
+#: change its verdicts; the endpoint, its deployment and data assets, and the
+#: question and answers are already keyed.
+_SCORE_CACHE_VERSION = 1
 
 
 class MissingConfigurationError(ModelUnavailableError):
@@ -454,6 +463,14 @@ class AzureBatchDetector(TextDetector):
     assignment question and calibrates thresholds across the answers it is
     given, so the composition of the batch is part of the input, not an
     implementation detail.
+
+    Each job's verdict records are kept in :attr:`score_cache`, when one is set,
+    as soon as the job finishes, keyed by the endpoint, its deployment and data
+    assets, the question, and the answers exactly as submitted. A rerun then
+    submits only the jobs that have not finished before. The records are mapped
+    onto :class:`~.base.ModelOutput` afresh on every call. Nothing is cached
+    unless :attr:`AzureBatchConfig.deployment_name` is set, because the
+    endpoint's default deployment can change from one run to the next.
     """
 
     requires_question = True
@@ -483,6 +500,7 @@ class AzureBatchDetector(TextDetector):
         super().__init__(model_name, normalized_scores, ood_margin, seed)
         self._config = config
         self._client = client
+        self._warned_uncached = False
 
     @property
     def config(self) -> AzureBatchConfig:
@@ -564,13 +582,21 @@ class AzureBatchDetector(TextDetector):
     def _score_chunk(
         self, client: BatchEndpointClient, question: str, answers: list[str], first_index: int
     ) -> dict[str, dict[str, Any]]:
-        """Run one endpoint invocation and return its verdict records."""
+        """Run one endpoint invocation, unless it is cached, and return its verdict records."""
+        submissions = {self._submission_filename(first_index + offset): text for offset, text in enumerate(answers)}
+
+        cache = self._verdict_cache()
+        cache_key = self._verdict_cache_key(question, submissions)
+        if cache is not None:
+            cached = cache.get(_SCORE_CACHE_NAMESPACE, cache_key)
+            if cached is not None:
+                LOGGER.info("Read the verdicts for %d answer(s) from the score cache", len(submissions))
+                return cached
+
         # Globally unique per invocation: concurrent evaluation runs share the
         # container, and a reused prefix would have one run's job read another
         # run's submissions folder.
         run_prefix = f"{self.config.blob_prefix}/{uuid.uuid4()}"
-
-        submissions = {self._submission_filename(first_index + offset): text for offset, text in enumerate(answers)}
 
         LOGGER.info("Submitting %d answer(s) to endpoint %s", len(submissions), self.config.endpoint_name)
         try:
@@ -583,11 +609,49 @@ class AzureBatchDetector(TextDetector):
             LOGGER.info("Batch job %s submitted; polling every %.0fs", job_name, self.config.poll_interval_seconds)
 
             self._wait_for_job(client, job_name)
-            return client.download_results(job_name)
+            records = client.download_results(job_name)
         finally:
             # The answers are dataset text, which should not outlive the job,
             # whether it finished or was abandoned.
             self._delete_inputs(client, run_prefix)
+
+        # Only a complete set, so that a job some of whose verdicts went missing
+        # is submitted again on the next run rather than failing from the cache.
+        if cache is not None and all(name in records for name in submissions):
+            cache.put(_SCORE_CACHE_NAMESPACE, cache_key, {name: records[name] for name in submissions})
+        return records
+
+    def _verdict_cache(self) -> ScoreCache | None:
+        """Return :attr:`score_cache`, or None if the verdicts cannot be tied to one deployment."""
+        if self.score_cache is None:
+            return None
+        if self.config.deployment_name is None:
+            if not self._warned_uncached:
+                LOGGER.warning(
+                    "Not caching verdicts: %sDEPLOYMENT_NAME is unset, and the endpoint's default "
+                    "deployment may change between runs. Every run submits every job.",
+                    AZURE_BATCH_ENV_PREFIX,
+                )
+                self._warned_uncached = True
+            return None
+        return self.score_cache
+
+    def _verdict_cache_key(self, question: str, submissions: dict[str, str]) -> dict[str, Any]:
+        """Everything that determines one job's verdicts: what runs it, and on what."""
+        config = self.config
+        return {
+            "version": _SCORE_CACHE_VERSION,
+            "ml_subscription_id": config.ml_subscription_id,
+            "ml_resource_group": config.ml_resource_group,
+            "ml_workspace_name": config.ml_workspace_name,
+            "endpoint_name": config.endpoint_name,
+            "deployment_name": config.deployment_name,
+            "pipeline_config_asset": config.pipeline_config_asset,
+            "detection_pool_asset": config.detection_pool_asset,
+            "word_count": config.assignment_default_word_count,
+            "question": question,
+            "answers": submissions,
+        }
 
     @staticmethod
     def _submission_filename(index: int) -> str:

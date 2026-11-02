@@ -20,6 +20,7 @@ from unittest.mock import MagicMock
 import numpy as np
 import pytest
 
+from text_detection_baselines.evaluate import predict_by_question
 from text_detection_baselines.models import build_model
 from text_detection_baselines.models.azure_batch import (
     AzureBatchConfig,
@@ -30,6 +31,7 @@ from text_detection_baselines.models.azure_batch import (
     TransientEndpointError,
     parse_analysis_reports,
 )
+from text_detection_baselines.models.cache import ScoreCache
 
 _ENV = {
     "TDB_AZURE_BATCH_STORAGE_ACCOUNT_URL": "https://example.blob.core.windows.net",
@@ -588,6 +590,112 @@ def test_failed_delete_is_logged_and_does_not_fail_the_run(caplog):
     assert output.predictions.tolist() == [0]
     # Named in the log so the inputs can be deleted by hand.
     assert f"Could not delete uploaded inputs under {client.submissions[0]['run_prefix']}" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Verdict cache
+# ---------------------------------------------------------------------------
+
+
+def _cached_detector(client, cache_path, deployment_name="deployment-1", **config_overrides):
+    """A detector with a pinned deployment, reading a fresh handle on *cache_path* as a separate run would."""
+    detector = _detector(client, deployment_name=deployment_name, **config_overrides)
+    detector.score_cache = ScoreCache(cache_path)
+    return detector
+
+
+def _no_action_records(n):
+    return {f"{i:06d}.txt": _record(f"{i:06d}.txt", "No action", score=i / 10, tau=0.0) for i in range(n)}
+
+
+def test_a_finished_job_is_read_from_the_cache_rather_than_resubmitted(tmp_path, caplog):
+    caplog.set_level(logging.INFO)
+    records = {
+        "000000.txt": _record("000000.txt", "No action", score=0.40, tau=0.70),
+        "000001.txt": _record("000001.txt", "Flag for review", score=0.95, tau=0.70),
+    }
+    expected = _cached_detector(FakeClient(records), tmp_path / "scores.sqlite3").predict(_QUESTION, ["a", "b"])
+
+    client = FakeClient({})
+    output = _cached_detector(client, tmp_path / "scores.sqlite3").predict(_QUESTION, ["a", "b"])
+
+    assert client.submissions == []
+    np.testing.assert_array_equal(output.scores, expected.scores)
+    np.testing.assert_array_equal(output.predictions, expected.predictions)
+    assert "Read the verdicts for 2 answer(s) from the score cache" in caplog.text
+
+
+def test_a_rerun_submits_only_the_questions_that_did_not_finish(tmp_path):
+    questions = np.array(["First question?", "First question?", "Second question?"])
+    answers = ["a", "b", "c"]
+    # The first question's job completes, and the second's fails.
+    failing = FakeClient(_no_action_records(2), statuses=["Completed", "Failed"])
+    with pytest.raises(RuntimeError, match="ended in state 'Failed'"):
+        predict_by_question(_cached_detector(failing, tmp_path / "scores.sqlite3"), questions, answers)
+
+    rerun = FakeClient(_no_action_records(2))
+    output = predict_by_question(_cached_detector(rerun, tmp_path / "scores.sqlite3"), questions, answers)
+
+    assert [submission["question"] for submission in rerun.submissions] == ["Second question?"]
+    np.testing.assert_allclose(output.scores, [0.0, 0.1, 0.0])
+
+
+def test_a_rerun_submits_only_the_chunks_that_did_not_finish(tmp_path):
+    failing = FakeClient(_no_action_records(4), statuses=["Completed", "Failed"])
+    with pytest.raises(RuntimeError, match="ended in state 'Failed'"):
+        _cached_detector(failing, tmp_path / "scores.sqlite3", max_batch_size=2).predict(_QUESTION, list("abcd"))
+
+    rerun = FakeClient(_no_action_records(4))
+    output = _cached_detector(rerun, tmp_path / "scores.sqlite3", max_batch_size=2).predict(_QUESTION, list("abcd"))
+
+    assert [list(submission["answers"]) for submission in rerun.submissions] == [["000002.txt", "000003.txt"]]
+    np.testing.assert_allclose(output.scores, [0.0, 0.1, 0.2, 0.3])
+
+
+def test_an_incomplete_set_of_verdicts_is_not_cached(tmp_path):
+    # Cached, it would fail every rerun the same way rather than being retried.
+    with pytest.raises(RuntimeError, match="no verdict for 1 of 2"):
+        _cached_detector(FakeClient(_no_action_records(1)), tmp_path / "scores.sqlite3").predict(_QUESTION, ["a", "b"])
+
+    rerun = FakeClient(_no_action_records(2))
+    _cached_detector(rerun, tmp_path / "scores.sqlite3").predict(_QUESTION, ["a", "b"])
+
+    assert len(rerun.submissions) == 1
+
+
+def test_nothing_is_cached_without_a_pinned_deployment(tmp_path, caplog):
+    # The endpoint's default deployment can change between runs, and the cache
+    # could not tell the verdicts of one from the other's.
+    client = FakeClient(_no_action_records(1))
+    detector = _cached_detector(client, tmp_path / "scores.sqlite3", deployment_name=None)
+
+    detector.predict(_QUESTION, ["a"])
+    detector.predict(_QUESTION, ["a"])
+
+    assert len(client.submissions) == 2
+    assert not (tmp_path / "scores.sqlite3").exists()
+    assert caplog.text.count("Not caching verdicts: TDB_AZURE_BATCH_DEPLOYMENT_NAME is unset") == 1
+
+
+@pytest.mark.parametrize(
+    ("question", "answers", "config_overrides"),
+    [
+        ("Another question?", ["a"], {}),
+        (_QUESTION, ["a, edited"], {}),
+        (_QUESTION, ["a"], {"deployment_name": "deployment-2"}),
+        (_QUESTION, ["a"], {"endpoint_name": "another-endpoint"}),
+        (_QUESTION, ["a"], {"detection_pool_asset": "azureml:detection_pool:6"}),
+        (_QUESTION, ["a"], {"assignment_default_word_count": 500}),
+    ],
+    ids=["question", "answer", "deployment", "endpoint", "data-asset", "word-count"],
+)
+def test_a_job_that_differs_in_any_input_is_submitted_anew(tmp_path, question, answers, config_overrides):
+    _cached_detector(FakeClient(_no_action_records(1)), tmp_path / "scores.sqlite3").predict(_QUESTION, ["a"])
+
+    client = FakeClient(_no_action_records(1))
+    _cached_detector(client, tmp_path / "scores.sqlite3", **config_overrides).predict(question, answers)
+
+    assert len(client.submissions) == 1
 
 
 # ---------------------------------------------------------------------------
